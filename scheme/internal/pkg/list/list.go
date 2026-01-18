@@ -4,7 +4,7 @@ func New[T any](t ...T) []T {
 	return t
 }
 
-func Cons[T any](head T, tail []T) []T {
+func Cons[T any](head T, tail ...T) []T {
 	return append(New(head), tail...)
 }
 

@@ -2,6 +2,7 @@ package lexer
 
 import (
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/lexer/types"
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/list"
 
 	"io"
 	"strconv"
@@ -10,23 +11,6 @@ import (
 	"unicode"
 
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/boolean"
-)
-
-const (
-	KwAnd    = "and"
-	KwOr     = "or"
-	KwXor    = "xor"
-	KwNot    = "not"
-	KwCons   = "cons"
-	KwCdr    = "cdr"
-	KwEq     = "eq"
-	KwLt     = "lt"
-	KwGt     = "gt"
-	KwLe     = "le"
-	KwGtEq   = "gt_eq"
-	KwLtEq   = "lt_eq"
-	KwLambda = "lambda"
-	KwIf     = "if"
 )
 
 type TokenType string
@@ -198,6 +182,24 @@ func (s *Scanner) consumeRParen() (tok Token) {
 	return Token{
 		Type:    TokenRParen,
 		Literal: ")",
+	}
+}
+
+var (
+	relationalOperRunes      = list.New('<', '>', '=')
+	relationalOperStartsWith = boolean.AnyFunc(onlyRunes(relationalOperRunes))
+	relationalOperEndToken   = boolean.NotFunc(relationalOperStartsWith)
+)
+
+func (s *Scanner) consumeRelationalOperator() (tok Token) {
+	sb := strings.Builder{}
+	sb.WriteRune(s.scan.Next())
+	content := s.collectRunes(relationalOperStartsWith, relationalOperEndToken)
+	sb.WriteString(content)
+	return Token{
+		Type:    TokenIdent,
+		Ident:   sb.String(),
+		Literal: sb.String(),
 	}
 }
 

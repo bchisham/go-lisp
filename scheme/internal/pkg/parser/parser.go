@@ -67,8 +67,8 @@ func New(ctx context.Context, tokSrc *lexer.Scanner, opts ...Option) *Parser {
 }
 
 func (p *Parser) Repl() {
-	fmt.Printf(p.prompt)
-
+	fmt.Printf("%s", p.prompt)
+	env := defaultEnvironment()
 	select {
 	case <-p.ctx.Done():
 		return
@@ -84,32 +84,18 @@ func (p *Parser) Repl() {
 				fmt.Printf("Error %#v", tok)
 			case lexer.TokenLParen:
 				//start new S - Expression
-				val, err := EvalSExpression(p)
+				val, err := EvalSExpression(p, env)
 				if err != nil {
 					return
 				}
-				printValue(val)
-				fmt.Printf(p.prompt)
+				_, _ = displayImpl(list.New(val), env)
+				fmt.Printf("%s", p.prompt)
 			}
 		}
 	}
 }
 
-func printValue(val types.Value) {
-	switch val.Type {
-	case types.String:
-		fmt.Printf("%s", val.StringVal)
-	case types.Int:
-		fmt.Printf("%d", val.IntVal)
-	case types.Float:
-		fmt.Printf("%f", val.FloatVal)
-	case types.Bool:
-		fmt.Printf("%t", val.BoolVal)
-	}
-	fmt.Println()
-}
-
-func EvalSExpression(p *Parser) (types.Value, error) {
+func EvalSExpression(p *Parser, env types.Environment) (types.Value, error) {
 	tok := p.tokSrc.NextToken()
 
 	var atoms []types.Value
@@ -123,7 +109,7 @@ func EvalSExpression(p *Parser) (types.Value, error) {
 		case lexer.TokenError:
 			return newVoidType(), ErrInvalidToken
 		case lexer.TokenLParen:
-			nestedExpr, err := EvalSExpression(p)
+			nestedExpr, err := EvalSExpression(p, env)
 			if err != nil {
 				return newVoidType(), err
 			}
@@ -140,116 +126,5 @@ func EvalSExpression(p *Parser) (types.Value, error) {
 		}
 	}
 eval:
-	return evalSexpression(atoms)
-}
-
-func defaultEnvironment() *types.Environment {
-	var builtins = types.NewEnvironment()
-
-	builtins.Define("format", newLambda(builtins, formatImpl))
-
-	return builtins
-}
-
-func evalSexpression(l []types.Value) (types.Value, error) {
-	head := list.Car(l)
-	tail := list.Cdr(l)
-	env := defaultEnvironment()
-	switch head.Type {
-	case types.Lambda:
-		return head.LambdaVal.Body(tail)
-	case types.Identifier:
-		resvVal, ok := env.Lookup(head.NameVal)
-		if !ok {
-			return newVoidType(), ErrUndefinedIdent
-		}
-		switch resvVal.Type {
-		case types.Lambda:
-			return resvVal.LambdaVal.Body(tail)
-
-		default:
-			return resvVal, nil
-		}
-	case types.List:
-		//TODO handle head is list
-	default:
-		return head, nil
-
-	}
-	return newVoidType(), nil
-}
-
-func newVoidType() types.Value {
-	return types.Value{
-		Type: types.Void,
-	}
-}
-
-func newString(s string) types.Value {
-	return types.Value{
-		Type: types.String,
-		Primitive: types.Primitive{
-			StringVal: s,
-		},
-	}
-}
-
-func newFloat(f float64) types.Value {
-	return types.Value{
-		Type: types.Float,
-		Primitive: types.Primitive{
-			FloatVal: f,
-		},
-	}
-}
-
-func newInt(i int64) types.Value {
-	return types.Value{
-		Type: types.Int,
-		Primitive: types.Primitive{
-			IntVal: i,
-		},
-	}
-}
-
-func newBool(b bool) types.Value {
-	return types.Value{
-		Type: types.Bool,
-		Primitive: types.Primitive{
-			BoolVal: b,
-		},
-	}
-}
-func newChar(c rune) types.Value {
-	return types.Value{
-		Type: types.Char,
-		Primitive: types.Primitive{
-			CharVal: string(c),
-		},
-	}
-}
-
-func newLambda(env *types.Environment, expression types.Expression) types.Value {
-	return types.Value{
-		Type: types.Lambda,
-		LambdaVal: types.LambdaExpr{
-			Env:  env,
-			Body: expression,
-		},
-	}
-}
-
-func newExpression(env types.Environment, body []types.Value) types.Expression {
-	return func(args []types.Value) (types.Value, error) {
-		return newVoidType(), nil
-	}
-}
-
-func newIdentifier(name string) types.Value {
-	return types.Value{
-		Type: types.Identifier,
-		Primitive: types.Primitive{
-			NameVal: name,
-		},
-	}
+	return evalSexpression(atoms, env)
 }

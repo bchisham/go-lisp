@@ -1,6 +1,13 @@
 package types
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/boolean"
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/lexer/types"
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/list"
+)
 
 type Type string
 
@@ -26,14 +33,20 @@ type Primitive struct {
 	IntVal    int64
 }
 
-type Expression func(args []Value) (Value, error)
+type Expression func(args []Value, environment Environment) (Value, error)
 type Environment struct {
 	state map[string]Value
 }
 
-func NewEnvironment() *Environment {
-	return &Environment{
+func NewEnvironment() Environment {
+	return Environment{
 		state: make(map[string]Value),
+	}
+}
+
+func FromEnvironment(env Environment) Environment {
+	return Environment{
+		state: env.state,
 	}
 }
 
@@ -48,7 +61,7 @@ func (env *Environment) Lookup(name string) (Value, bool) {
 
 type LambdaExpr struct {
 	Name string
-	Env  *Environment
+	Env  Environment
 	Body Expression
 }
 
@@ -62,7 +75,7 @@ type Value struct {
 func (v *Value) String() string {
 	switch v.Type {
 	case Bool:
-		return fmt.Sprintf("%v", v.BoolVal)
+		return fmt.Sprintf("%s", boolean.Trinary(v.BoolVal, types.LiteralTrue, types.LiteralFalse))
 	case Char:
 		return fmt.Sprintf("%v", v.CharVal)
 	case String:
@@ -72,9 +85,23 @@ func (v *Value) String() string {
 	case Int:
 		return fmt.Sprintf("%v", v.IntVal)
 	case List:
-		return fmt.Sprintf("%v", v.ListVal)
+		sb := strings.Builder{}
+		sb.WriteString("(")
+		sb.WriteString(
+			strings.Join(
+				list.Apply(
+					v.ListVal,
+					func(v Value) string { return v.String() }),
+				" "),
+		)
+		sb.WriteString(")")
+		return fmt.Sprintf("%s", sb.String())
 	case Lambda:
 		return fmt.Sprintf("%v", "lambda")
 	}
-	return fmt.Sprintf("%v", v.Type)
+	return ""
+}
+
+func (l LambdaExpr) Apply(args []Value) (Value, error) {
+	return l.Body(args, l.Env)
 }
