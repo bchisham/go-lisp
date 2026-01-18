@@ -1,4 +1,4 @@
-module lisp
+module "github.com/bchisham/go-lisp/scheme"
 
 go 1.25
 

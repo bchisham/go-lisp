@@ -34,7 +34,7 @@ go.work.sum
 /.idea/aws.xml
 /.idea/copilot.data.migration.agent.xml
 /.idea/go.imports.xml
-/lisp/go.sum
+/scheme/go.sum
 /.idea/go-lisp.iml
 /.idea/modules.xml
 /.idea/vcs.xml

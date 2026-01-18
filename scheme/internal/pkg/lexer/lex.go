@@ -1,14 +1,15 @@
 package lexer
 
 import (
-	"lisp/internal/pkg/lexer/types"
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/lexer/types"
 
 	"io"
-	"lisp/internal/pkg/boolean"
 	"strconv"
 	"strings"
 	"text/scanner"
 	"unicode"
+
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/boolean"
 )
 
 const (
@@ -34,6 +35,7 @@ const (
 	TokenEOF         TokenType = "EOF"
 	TokenError       TokenType = "error"
 	TokenNumber      TokenType = "number"
+	TokenInt         TokenType = "int"
 	TokenString      TokenType = "string"
 	TokenSymbol      TokenType = "symbol"
 	TokenIdent       TokenType = "ident"
@@ -63,25 +65,29 @@ func (t Token) String() string {
 }
 
 type Scanner struct {
-	scanner.Scanner
+	scan scanner.Scanner
 }
 
 func New(r io.Reader) *Scanner {
 	s := &Scanner{
 		scanner.Scanner{},
 	}
-	s.Init(r)
+	s.scan.Init(r)
 	return s
 }
 
+// NextToken extract the next token from the input stream
 func (s *Scanner) NextToken() (tok Token) {
 
-	for ch := s.Peek(); ch != scanner.EOF; ch = s.Peek() {
+	for ch := s.scan.Peek(); ch != scanner.EOF; ch = s.scan.Peek() {
 		if unicode.IsDigit(ch) || ch == '-' {
 			return s.consumeNumber()
 		}
 		if unicode.IsLetter(ch) {
 			return s.consumeIdentifier()
+		}
+		if unicode.IsSpace(ch) {
+			s.scan.Next()
 		}
 		switch ch {
 		case '[':
@@ -126,7 +132,7 @@ func (s *Scanner) consumeNumber() (_ Token) {
 	}
 
 	return Token{
-		Type:    TokenNumber,
+		Type:    TokenInt,
 		Literal: itxt,
 		Int:     intval,
 	}
@@ -153,7 +159,7 @@ func (s *Scanner) consumeString() (_ Token) {
 	var (
 		sb       strings.Builder
 		content  strings.Builder
-		quotChar = s.Next()
+		quotChar = s.scan.Next()
 	)
 
 	if quotChar == scanner.String {
@@ -161,11 +167,12 @@ func (s *Scanner) consumeString() (_ Token) {
 	}
 	sb.WriteRune(quotChar)
 
-	for ch := s.Peek(); ch != scanner.EOF && ch != scanner.String; ch = s.Peek() {
+	for ch := s.scan.Peek(); ch != scanner.EOF && ch != scanner.String; ch = s.scan.Peek() {
 		if ch == quotChar {
+			s.scan.Next()
 			break
 		}
-		content.WriteRune(s.Next())
+		content.WriteRune(s.scan.Next())
 		sb.WriteRune(ch)
 	}
 	sb.WriteRune(quotChar)
@@ -179,7 +186,7 @@ func (s *Scanner) consumeString() (_ Token) {
 }
 
 func (s *Scanner) consumeLParen() (tok Token) {
-	_ = s.Next()
+	_ = s.scan.Next()
 	return Token{
 		Type:    TokenLParen,
 		Literal: "(",
@@ -187,7 +194,7 @@ func (s *Scanner) consumeLParen() (tok Token) {
 }
 
 func (s *Scanner) consumeRParen() (tok Token) {
-	_ = s.Next()
+	_ = s.scan.Next()
 	return Token{
 		Type:    TokenRParen,
 		Literal: ")",
@@ -195,7 +202,7 @@ func (s *Scanner) consumeRParen() (tok Token) {
 }
 
 func (s *Scanner) consumeColonIdent() Token {
-	s.Next()
+	s.scan.Next()
 	txt := s.collectRunes(startIdentifierFunc, continueIdentifierFunc)
 	return Token{
 		Type:    TokenColonIdent,
@@ -206,8 +213,8 @@ func (s *Scanner) consumeColonIdent() Token {
 
 // line-comments start with ";;" followed by any text to end of the line
 func (s *Scanner) consumeSemiColonOrLineComment() Token {
-	s.Next()
-	if s.Peek() != ';' {
+	s.scan.Next()
+	if s.scan.Peek() != ';' {
 		return Token{
 			Type:    TokenSemiColon,
 			Literal: ";",
@@ -221,16 +228,16 @@ func (s *Scanner) consumeSemiColonOrLineComment() Token {
 
 func (s *Scanner) collectRunes(startsWith types.RuneClassifier, exitCondition types.RuneClassifier) string {
 	var sb strings.Builder
-	if !startsWith(s.Peek()) {
+	if !startsWith(s.scan.Peek()) {
 		return ""
 	}
-	sb.WriteRune(s.Next())
+	sb.WriteRune(s.scan.Next())
 
-	for ch := s.Peek(); ch != scanner.EOF; ch = s.Peek() {
+	for ch := s.scan.Peek(); ch != scanner.EOF; ch = s.scan.Peek() {
 		if exitCondition(ch) {
 			goto tokenComplete
 		}
-		sb.WriteRune(s.Next())
+		sb.WriteRune(s.scan.Next())
 
 	}
 tokenComplete:
