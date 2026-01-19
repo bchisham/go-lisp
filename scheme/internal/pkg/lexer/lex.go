@@ -1,6 +1,9 @@
 package lexer
 
 import (
+	"fmt"
+	"slices"
+
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/lexer/types"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/list"
 
@@ -16,22 +19,26 @@ import (
 type TokenType string
 
 const (
-	TokenEOF         TokenType = "EOF"
-	TokenError       TokenType = "error"
-	TokenNumber      TokenType = "number"
-	TokenInt         TokenType = "int"
-	TokenString      TokenType = "string"
-	TokenSymbol      TokenType = "symbol"
-	TokenIdent       TokenType = "ident"
-	TokenColonIdent  TokenType = "colon_ident"
-	TokenLParen      TokenType = "("
-	TokenRParen      TokenType = ")"
-	TokenLBracket    TokenType = "["
-	TokenRBracket    TokenType = "]"
-	TokenLBrace      TokenType = "{"
-	TokenRBrace      TokenType = "}"
-	TokenSemiColon   TokenType = ";"
-	TokenLineComment TokenType = "line_comment"
+	TokenEOF                TokenType = "EOF"
+	TokenError              TokenType = "error"
+	TokenNumber             TokenType = "number"
+	TokenInt                TokenType = "int"
+	TokenString             TokenType = "string"
+	TokenBoolean            TokenType = "boolean"
+	TokenSymbol             TokenType = "symbol"
+	TokenIdent              TokenType = "ident"
+	TokenColonIdent         TokenType = "colon_ident"
+	TokenLParen             TokenType = "("
+	TokenRParen             TokenType = ")"
+	TokenLBracket           TokenType = "["
+	TokenRBracket           TokenType = "]"
+	TokenLBrace             TokenType = "{"
+	TokenRBrace             TokenType = "}"
+	TokenSemiColon          TokenType = ";"
+	TokenQuot               TokenType = "'"
+	TokenLineComment        TokenType = "line_comment"
+	TokenRelationalOperator TokenType = "relationalOperator"
+	TokenArithmeticOperator TokenType = "arithmeticOperator"
 )
 
 type Token struct {
@@ -39,6 +46,7 @@ type Token struct {
 	Literal string
 	Int     int64
 	Float   float64
+	Bool    bool
 	Text    string
 	Ident   string
 	Error   LexError
@@ -64,7 +72,7 @@ func New(r io.Reader) *Scanner {
 func (s *Scanner) NextToken() (tok Token) {
 
 	for ch := s.scan.Peek(); ch != scanner.EOF; ch = s.scan.Peek() {
-		if unicode.IsDigit(ch) || ch == '-' {
+		if unicode.IsDigit(ch) {
 			return s.consumeNumber()
 		}
 		if unicode.IsLetter(ch) {
@@ -92,8 +100,15 @@ func (s *Scanner) NextToken() (tok Token) {
 			return s.consumeColonIdent()
 		case '"':
 			return s.consumeString()
+		case '\'':
+			return s.consumeQuot()
+		case '<', '>', '=':
+			return s.consumeRelationalOperator()
+		case '+', '-', '*', '/', '%':
+			return s.consumeArithmeticOperatorOrNumber()
+		case '#':
+			return s.consumeBooleanLiteral()
 		}
-
 	}
 
 	return Token{Type: TokenEOF}
@@ -191,18 +206,6 @@ var (
 	relationalOperEndToken   = boolean.NotFunc(relationalOperStartsWith)
 )
 
-func (s *Scanner) consumeRelationalOperator() (tok Token) {
-	sb := strings.Builder{}
-	sb.WriteRune(s.scan.Next())
-	content := s.collectRunes(relationalOperStartsWith, relationalOperEndToken)
-	sb.WriteString(content)
-	return Token{
-		Type:    TokenIdent,
-		Ident:   sb.String(),
-		Literal: sb.String(),
-	}
-}
-
 func (s *Scanner) consumeColonIdent() Token {
 	s.scan.Next()
 	txt := s.collectRunes(startIdentifierFunc, continueIdentifierFunc)
@@ -225,6 +228,64 @@ func (s *Scanner) consumeSemiColonOrLineComment() Token {
 	_ = s.collectRunes(unicode.IsGraphic, anyBut([]rune{'\n'}))
 	return Token{
 		Type: TokenLineComment,
+	}
+}
+
+func (s *Scanner) consumeQuot() Token {
+	_ = s.scan.Next()
+	return Token{
+		Type:    TokenQuot,
+		Literal: string(TokenQuot),
+	}
+}
+
+func (s *Scanner) consumeRelationalOperator() Token {
+	start := s.scan.Next()
+	if slices.Contains(list.New('<', '>'), start) && '=' == s.scan.Peek() {
+		next := s.scan.Next()
+		return Token{
+			Type:    TokenRelationalOperator,
+			Literal: string(start) + string(next),
+		}
+	}
+	return Token{
+		Type:    TokenRelationalOperator,
+		Literal: string(start),
+	}
+}
+
+func (s *Scanner) consumeArithmeticOperatorOrNumber() Token {
+	oper := s.scan.Next()
+	if oper == '-' && unicode.IsDigit(s.scan.Peek()) {
+		//this is a number not ([operator]  .... )
+		number := s.consumeNumber()
+		number.Literal = fmt.Sprintf("%c%s", oper, number)
+		number.Int = -number.Int
+		number.Float = -number.Float
+		return number
+	}
+	return Token{
+		Type:    TokenArithmeticOperator,
+		Literal: string(oper),
+	}
+}
+
+func (s *Scanner) consumeBooleanLiteral() Token {
+	_ = s.scan.Next() //#
+	if slices.Contains(list.New('t', 'f'), s.scan.Peek()) {
+		val := s.scan.Next()
+		return Token{
+			Type:    TokenBoolean,
+			Literal: "#" + string(val),
+			Bool:    val == 't',
+		}
+	}
+	return Token{
+		Type:    TokenError,
+		Literal: "#" + string(s.scan.Peek()),
+		Error: LexError{
+			Message: "invalid boolean literal",
+		},
 	}
 }
 

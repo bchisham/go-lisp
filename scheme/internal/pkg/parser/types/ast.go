@@ -1,4 +1,4 @@
-package values
+package types
 
 type Type string
 

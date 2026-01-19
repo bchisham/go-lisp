@@ -10,7 +10,7 @@ const (
 	Format  NativeFunc = "format"
 	Write   NativeFunc = "write"
 	Display NativeFunc = "display"
-	Quot    NativeFunc = "quot"
+	//Quot    NativeFunc = "quot"
 )
 
 func FromString(s string) (NativeFunc, error) {

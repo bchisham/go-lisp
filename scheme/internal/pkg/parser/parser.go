@@ -2,19 +2,13 @@ package parser
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/lexer"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/list"
-	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 )
-
-var ErrUnexpectedToken = errors.New("unexpected token")
-var ErrInvalidToken = errors.New("invalid token")
-var ErrUndefinedIdent = errors.New("undefined identifier")
-var ErrEof = errors.New("eof")
 
 const (
 	Quiet VerboseLevel = iota
@@ -27,8 +21,9 @@ const (
 type VerboseLevel int
 
 type config struct {
-	prompt  string
-	verbose VerboseLevel
+	prompt              string
+	verbose             VerboseLevel
+	showExpressionCount bool
 }
 
 type Option func(*config)
@@ -45,10 +40,17 @@ func WithPrompt(prompt string) Option {
 	}
 }
 
+func WithShowExpressionCount(showExpressionCount bool) Option {
+	return func(c *config) {
+		c.showExpressionCount = showExpressionCount
+	}
+}
+
 type Parser struct {
 	config
-	ctx    context.Context
-	tokSrc *lexer.Scanner
+	ctx     context.Context
+	tokSrc  *lexer.Scanner
+	exprnNo int
 }
 
 func New(ctx context.Context, tokSrc *lexer.Scanner, opts ...Option) *Parser {
@@ -67,7 +69,7 @@ func New(ctx context.Context, tokSrc *lexer.Scanner, opts ...Option) *Parser {
 }
 
 func (p *Parser) Repl() {
-	fmt.Printf("%s", p.prompt)
+	p.doPrompt()
 	env := defaultEnvironment()
 	select {
 	case <-p.ctx.Done():
@@ -86,41 +88,51 @@ func (p *Parser) Repl() {
 				//start new S - Expression
 				val, err := EvalSExpression(p, env)
 				if err != nil {
-					return
+					fmt.Printf("Error %v\n", err)
 				}
 				_, _ = displayImpl(list.New(val), env)
 				fmt.Printf("%s", p.prompt)
 			}
+			p.exprnNo++
 		}
 	}
 }
 
-func EvalSExpression(p *Parser, env types.Environment) (types.Value, error) {
+func (p *Parser) doPrompt() {
+	if p.showExpressionCount && p.prompt != "" {
+		fmt.Printf("%d:%s", p.exprnNo, p.prompt)
+	} else if p.prompt != "" {
+		fmt.Printf("%s ", p.prompt)
+	}
+}
+
+func EvalSExpression(p *Parser, env values.Environment) (values.Value, error) {
 	tok := p.tokSrc.NextToken()
 
-	var atoms []types.Value
+	var atoms []values.Value
 	for ; tok.Type != lexer.TokenEOF; tok = p.tokSrc.NextToken() {
 		if p.verbose >= Debug {
 			_, _ = fmt.Fprintf(os.Stderr, "Token Type: %v Token Literal: %v\n", tok.Type, tok.Literal)
 		}
 		switch tok.Type {
 		case lexer.TokenEOF:
-			return newVoidType(), nil
+			return values.NewVoidType(), nil
 		case lexer.TokenError:
-			return newVoidType(), ErrInvalidToken
+			return values.NewVoidType(), ErrInvalidToken
 		case lexer.TokenLParen:
 			nestedExpr, err := EvalSExpression(p, env)
 			if err != nil {
-				return newVoidType(), err
+				return values.NewVoidType(), err
 			}
 			atoms = append(atoms, nestedExpr)
-		case lexer.TokenIdent:
-			ident := newIdentifier(tok.Literal)
-			atoms = append(atoms, ident)
-		case lexer.TokenInt:
-			atoms = append(atoms, newInt(tok.Int))
-		case lexer.TokenString:
-			atoms = append(atoms, newString(tok.Text))
+		case lexer.TokenQuot,
+			lexer.TokenIdent,
+			lexer.TokenInt,
+			lexer.TokenString,
+			lexer.TokenBoolean,
+			lexer.TokenRelationalOperator,
+			lexer.TokenArithmeticOperator:
+			atoms = append(atoms, values.FromToken(tok))
 		case lexer.TokenRParen:
 			goto eval
 		}

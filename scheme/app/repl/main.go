@@ -50,6 +50,7 @@ func main() {
 		context.Background(),
 		lexer.New(in),
 		parser.WithPrompt(prompt),
+		parser.WithShowExpressionCount(true),
 		parser.WithVerbose(parser.VerboseLevel(debugLevel)))
 
 	p.Repl()

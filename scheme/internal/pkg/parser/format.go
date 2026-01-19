@@ -7,6 +7,7 @@ import (
 
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/list"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 )
 
 var (
@@ -14,31 +15,36 @@ var (
 	ErrBadArgument   = errors.New("bad argument")
 )
 
-func displayImpl(args []types.Value, env types.Environment) (types.Value, error) {
+func displayImpl(args []values.Value, env values.Environment) (values.Value, error) {
 	sb := &strings.Builder{}
-	sb.WriteString(strings.Join(list.Apply(args, func(v types.Value) string { return v.String() }), " "))
+	sb.WriteString(strings.Join(list.Apply(args, func(v values.Value) string { return v.String() }), " "))
 	fmt.Println(sb.String())
-	return newVoidType(), nil
+	return values.NewVoidType(), nil
 }
 
-func writeImpl(args []types.Value, env types.Environment) (types.Value, error) {
+func writeImpl(args []values.Value, env values.Environment) (values.Value, error) {
 	sb := &strings.Builder{}
-	sb.WriteString(strings.Join(list.Apply(args, func(v types.Value) string {
+	sb.WriteString(strings.Join(list.Apply(args, func(v values.Value) string {
 		switch v.Type {
 		case types.String:
-			return "\"" + v.String() + "\""
+			switch v.String() {
+			//case "\n":
+			//	return "\n"
+			default:
+				return fmt.Sprintf("%q", v.String())
+			}
 		default:
 			return v.String()
 		}
 	}), " "))
 	fmt.Print(sb.String())
-	return newVoidType(), nil
+	return values.NewVoidType(), nil
 
 }
 
-func formatImpl(args []types.Value, env types.Environment) (types.Value, error) {
+func formatImpl(args []values.Value, env values.Environment) (values.Value, error) {
 	if len(args) < 2 {
-		return newVoidType(), ErrBadArgument
+		return values.NewVoidType(), ErrBadArgument
 	}
 	f := list.Car(args)
 	obj := list.Car(list.Cdr(args))
@@ -55,5 +61,5 @@ func formatImpl(args []types.Value, env types.Environment) (types.Value, error) 
 		fmt.Printf("%#v", obj)
 	}
 
-	return newVoidType(), nil
+	return values.NewVoidType(), nil
 }
