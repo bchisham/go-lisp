@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -10,55 +9,64 @@ import (
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 )
 
-var (
-	ErrInvalidFormat = errors.New("invalid format")
-	ErrBadArgument   = errors.New("bad argument")
-)
+var ()
 
-func displayImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func displayImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	sb := &strings.Builder{}
-	sb.WriteString(strings.Join(list.Apply(args, func(v values.Value) string { return v.String() }), " "))
-	fmt.Println(sb.String())
+	sb.WriteString(strings.Join(list.Apply(args, func(v values.Interface) string { return v.DisplayString() }), " "))
+	_, err := fmt.Fprintln(rt.Out, sb.String())
+	if err != nil {
+		return values.NewVoidType(), ErrIo(err)
+	}
 	return values.NewVoidType(), nil
 }
 
-func writeImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func writeImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	sb := &strings.Builder{}
-	sb.WriteString(strings.Join(list.Apply(args, func(v values.Value) string {
-		switch v.Type {
+	sb.WriteString(strings.Join(list.Apply(args, func(v values.Interface) string {
+		switch v.Type() {
 		case types.String:
 			switch v.String() {
-			//case "\n":
-			//	return "\n"
 			default:
-				return fmt.Sprintf("%q", v.String())
+				return fmt.Sprintf("%q", v.WriteString())
 			}
 		default:
-			return v.String()
+			return v.WriteString()
 		}
 	}), " "))
-	fmt.Print(sb.String())
+	_, err := fmt.Fprint(rt.Out, sb.String())
+	if err != nil {
+		return values.NewVoidType(), ErrIo(err)
+	}
 	return values.NewVoidType(), nil
-
 }
 
-func formatImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func formatImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	if len(args) < 2 {
 		return values.NewVoidType(), ErrBadArgument
 	}
 	f := list.Car(args)
 	obj := list.Car(list.Cdr(args))
+	var err error
+	if f.Type() != types.Identifier {
+		return values.NewVoidType(), ErrBadArgument
+	}
 
-	switch f.NameVal {
+	switch f.String() {
 	case "t":
-		switch obj.Type {
+		switch obj.Type() {
 		case types.String:
-			fmt.Printf("%s", obj.StringVal)
+			_, err = fmt.Fprintf(rt.Out, "%s", obj.String())
+			return values.NewVoidType(), ErrIo(err)
 		case types.Identifier:
-			fmt.Printf("%s", obj.NameVal)
+			_, err = fmt.Fprintf(rt.Out, "%s", obj.String())
+			return values.NewVoidType(), ErrIo(err)
 		}
 	default:
-		fmt.Printf("%#v", obj)
+		_, err = fmt.Fprintf(rt.Out, "%#v", obj)
+		if err != nil {
+			return values.NewVoidType(), ErrIo(err)
+		}
 	}
 
 	return values.NewVoidType(), nil

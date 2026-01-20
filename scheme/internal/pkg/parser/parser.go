@@ -1,9 +1,9 @@
 package parser
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/lexer"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/list"
@@ -68,9 +68,24 @@ func New(ctx context.Context, tokSrc *lexer.Scanner, opts ...Option) *Parser {
 	}
 }
 
-func (p *Parser) Repl() {
-	p.doPrompt()
-	env := defaultEnvironment()
+func (p *Parser) SetPrompt(prompt string) {
+	p.prompt = prompt
+}
+
+func (p *Parser) Eval(rt *Runtime) (values.Interface, error) {
+	val, err := EvalSExpression(p, rt)
+	p.exprnNo++
+	_, err = displayImpl(list.New(val), rt)
+	if err != nil {
+		_, _ = fmt.Fprintf(rt.Err, "Error %v\n", err)
+	}
+	return val, err
+}
+
+func (p *Parser) Repl(rtOpts ...OptionRuntime) {
+
+	rt := NewRuntime(rtOpts...)
+	p.doPrompt(rt)
 	select {
 	case <-p.ctx.Done():
 		return
@@ -79,40 +94,54 @@ func (p *Parser) Repl() {
 			switch tok.Type {
 			case lexer.TokenEOF:
 				if p.verbose > Quiet {
-					fmt.Println("Bye")
+					_, _ = fmt.Fprintln(rt.Out, "Bye")
 				}
 				return
 			case lexer.TokenError:
-				fmt.Printf("Error %#v", tok)
+				_, _ = fmt.Fprintf(rt.Err, "Error %#v", tok)
 			case lexer.TokenLParen:
 				//start new S - Expression
-				val, err := EvalSExpression(p, env)
+				val, err := EvalSExpression(p, rt)
 				if err != nil {
-					fmt.Printf("Error %v\n", err)
+					_, _ = fmt.Fprintf(rt.Err, "Error %v\n", err)
 				}
-				_, _ = displayImpl(list.New(val), env)
-				fmt.Printf("%s", p.prompt)
+				_, err = displayImpl(list.New(val), rt)
+				if err != nil {
+					_, _ = fmt.Fprintf(rt.Err, "Error %v\n", err)
+				}
+				p.doPrompt(rt)
 			}
 			p.exprnNo++
 		}
 	}
 }
 
-func (p *Parser) doPrompt() {
+func (p *Parser) doPrompt(rt *Runtime) {
 	if p.showExpressionCount && p.prompt != "" {
-		fmt.Printf("%d:%s", p.exprnNo, p.prompt)
+		_, _ = fmt.Fprintf(rt.Out, "%d:%s", p.exprnNo, p.prompt)
 	} else if p.prompt != "" {
-		fmt.Printf("%s ", p.prompt)
+		_, _ = fmt.Fprintf(rt.Out, "%s ", p.prompt)
 	}
 }
 
-func EvalSExpression(p *Parser, env values.Environment) (values.Value, error) {
+func EvalString(ctx context.Context, str string, rt *Runtime) (values.Interface, error) {
+	p := New(ctx, lexer.New(bytes.NewBufferString(str)))
+	val, err := EvalSExpression(p, rt)
+	p.exprnNo++
+	_, err = displayImpl(list.New(val), rt)
+	if err != nil {
+		_, _ = fmt.Fprintf(rt.Err, "Error %v\n", err)
+	}
+	return val, err
+}
+
+func EvalSExpression(p *Parser, rt *Runtime) (values.Interface, error) {
 	tok := p.tokSrc.NextToken()
 
-	var atoms []values.Value
+	var atoms []values.Interface
 	for ; tok.Type != lexer.TokenEOF; tok = p.tokSrc.NextToken() {
 		if p.verbose >= Debug {
-			_, _ = fmt.Fprintf(os.Stderr, "Token Type: %v Token Literal: %v\n", tok.Type, tok.Literal)
+			_, _ = fmt.Fprintf(rt.Err, "Token Runtime: %v Token Literal: %v\n", tok.Type, tok.Literal)
 		}
 		switch tok.Type {
 		case lexer.TokenEOF:
@@ -120,7 +149,7 @@ func EvalSExpression(p *Parser, env values.Environment) (values.Value, error) {
 		case lexer.TokenError:
 			return values.NewVoidType(), ErrInvalidToken
 		case lexer.TokenLParen:
-			nestedExpr, err := EvalSExpression(p, env)
+			nestedExpr, err := EvalSExpression(p, rt)
 			if err != nil {
 				return values.NewVoidType(), err
 			}
@@ -138,5 +167,5 @@ func EvalSExpression(p *Parser, env values.Environment) (values.Value, error) {
 		}
 	}
 eval:
-	return evalSexpression(atoms, env)
+	return evalSexpression(atoms, rt)
 }

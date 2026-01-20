@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/list"
@@ -8,34 +9,14 @@ import (
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 )
 
-func defaultEnvironment() values.Environment {
-	var builtins = values.NewEnvironment()
-	builtins.Define("newline", values.NewString("\n"))
-	//I/O
-	builtins.Define(types.Format.String(), values.NewLambda(builtins, formatImpl))
-	builtins.Define(types.Write.String(), values.NewLambda(builtins, writeImpl))
-	builtins.Define(types.Display.String(), values.NewLambda(builtins, displayImpl))
-	//relational operators
-	builtins.Define("<", values.NewLambda(builtins, lessThanImpl))
-	builtins.Define("<=", values.NewLambda(builtins, lessThanOrImpl))
-	builtins.Define(">", values.NewLambda(builtins, greatThanImpl))
-	builtins.Define(">=", values.NewLambda(builtins, greatThanOrImpl))
-	builtins.Define("=", values.NewLambda(builtins, equalImpl))
-	//boolean operators
-	builtins.Define("not", values.NewLambda(builtins, notImpl))
-	//arithmetic
-	builtins.Define("+", values.NewLambda(builtins, sumImpl))
-	builtins.Define("-", values.NewLambda(builtins, differenceImpl))
-	builtins.Define("*", values.NewLambda(builtins, productImpl))
-
-	return builtins
-}
-
 // evalSexpression evaluate a S-Expression i the given environment.
-func evalSexpression(l []values.Value, env values.Environment) (values.Value, error) {
+func evalSexpression(l []values.Interface, rt *Runtime) (values.Interface, error) {
+	if len(l) == 0 {
+		return values.NewVoidType(), fmt.Errorf("no expression found")
+	}
 	head := list.Car(l)
 	tail := list.Cdr(l)
-	switch head.Type {
+	switch head.Type() {
 	case types.Quot:
 		switch len(tail) {
 		case 0:
@@ -43,26 +24,44 @@ func evalSexpression(l []values.Value, env values.Environment) (values.Value, er
 		case 1:
 			return tail[0], nil
 		default:
-			return evalSexpression(tail, env)
+			return evalSexpression(tail, rt)
 		}
 	case types.RelationalOperator, types.ArithmeticOperator:
-		oper, ok := env.Lookup(head.Literal)
+		p, err := head.AsPrimitive()
+		if err != nil {
+			return values.NewVoidType(), err
+		}
+		oper, ok := rt.Env.Lookup(p.Literal)
 		if !ok {
 			return values.NewVoidType(), ErrOperatorIsNotAProcedure
 		}
-		return oper.LambdaVal.Apply(tail)
+		lambda, ok := oper.(LambdaExpr)
+
+		return lambda.Apply(tail)
 	case types.Lambda:
-		return head.LambdaVal.Apply(tail)
+		lambda, ok := head.(LambdaExpr)
+		if !ok {
+			return values.NewVoidType(), ErrOperatorIsNotAProcedure
+		}
+		return lambda.Apply(tail)
 	case types.Identifier:
-		resvVal, ok := env.Lookup(head.NameVal)
+		p, err := head.AsPrimitive()
+		if err != nil {
+			return values.NewVoidType(), err
+		}
+		resvVal, ok := rt.Env.Lookup(p.NameVal)
 		if !ok {
 			return values.NewVoidType(), ErrUndefinedIdent
 		}
-		_, userDefined := types.FromString(head.NameVal)
-		switch resvVal.Type {
+		_, userDefined := types.FromString(p.NameVal)
+		switch resvVal.Type() {
 		case types.Lambda:
 			if userDefined == nil {
-				return resvVal.LambdaVal.Apply(tail)
+				lambda, ok := resvVal.(LambdaExpr)
+				if !ok {
+					return values.NewVoidType(), ErrOperatorIsNotAProcedure
+				}
+				return lambda.Apply(tail)
 			}
 			return resvVal, nil
 
@@ -77,7 +76,7 @@ func evalSexpression(l []values.Value, env values.Environment) (values.Value, er
 	}
 }
 
-func quotImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func quotImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	if len(args) == 1 {
 		return args[0], nil
 	}
@@ -88,119 +87,191 @@ func relationalCompareAllowed(t types.Type) bool {
 	return slices.Contains(list.New(types.Int, types.Float), t)
 }
 
-func lessThanImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func lessThanImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	//https://try.scheme.org/ returns #t when there are no operands
 	if len(args) == 0 {
 		return values.NewBool(true), nil
 	}
 
 	if len(args) == 1 {
-		return values.NewBool(relationalCompareAllowed(args[0].Type)), nil
+		return values.NewBool(relationalCompareAllowed(args[0].Type())), nil
 	}
 	head := list.Car(args)
 	tail := list.Cdr(args)
 	second := list.Car(tail)
 
-	if !relationalCompareAllowed(head.Type) || !relationalCompareAllowed(second.Type) {
+	if !relationalCompareAllowed(head.Type()) ||
+		!relationalCompareAllowed(second.Type()) {
 		return values.NewBool(false), nil
 	}
-	tailIsInvariant, err := lessThanImpl(tail, env)
+	ti, err := lessThanImpl(tail, rt)
+	if err != nil {
+		return values.NewBool(false), err
+	}
+	tailIsInvariant, err := ti.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), nil
+	}
+
+	lhs, err := head.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+	rhs, err := second.AsPrimitive()
 	if err != nil {
 		return values.NewBool(false), err
 	}
 
-	return values.NewBool(head.FloatVal < second.FloatVal && tailIsInvariant.BoolVal), nil
+	return values.NewBool(lhs.FloatVal < rhs.FloatVal && tailIsInvariant.BoolVal), nil
 
 }
 
-func lessThanOrImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func lessThanOrImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	if len(args) == 0 {
 		return values.NewBool(true), nil
 	}
 	if len(args) == 1 {
-		return values.NewBool(relationalCompareAllowed(args[0].Type)), nil
+		return values.NewBool(relationalCompareAllowed(args[0].Type())), nil
 	}
 	head := list.Car(args)
 	tail := list.Cdr(args)
 	second := list.Car(tail)
-	if !relationalCompareAllowed(head.Type) || !relationalCompareAllowed(second.Type) {
+	if !relationalCompareAllowed(head.Type()) || !relationalCompareAllowed(second.Type()) {
 		return values.NewBool(false), nil
 	}
-	tailIsInvariant, err := lessThanOrImpl(tail, env)
+	ti, err := lessThanOrImpl(tail, rt)
 	if err != nil {
 		return values.NewBool(false), err
 	}
-	return values.NewBool(head.FloatVal <= second.FloatVal && tailIsInvariant.BoolVal), nil
+	tailIsInvariant, err := ti.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+	lhs, err := head.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+	rhs, err := second.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+
+	return values.NewBool(lhs.FloatVal <= rhs.FloatVal && tailIsInvariant.BoolVal), nil
 }
 
-func greatThanImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func greatThanImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	if len(args) == 0 {
 		return values.NewBool(true), nil
 	}
 	if len(args) == 1 {
-		return values.NewBool(relationalCompareAllowed(args[0].Type)), nil
+		return values.NewBool(relationalCompareAllowed(args[0].Type())), nil
 	}
 	head := list.Car(args)
 	tail := list.Cdr(args)
 	second := list.Car(tail)
-	if !relationalCompareAllowed(head.Type) || !relationalCompareAllowed(second.Type) {
+	if !relationalCompareAllowed(head.Type()) ||
+		!relationalCompareAllowed(second.Type()) {
 		return values.NewBool(false), nil
 	}
-	tailIsInvariant, err := greatThanImpl(tail, env)
+	ti, err := greatThanImpl(tail, rt)
 	if err != nil {
 		return values.NewBool(false), err
 	}
-	return values.NewBool(head.FloatVal > second.FloatVal && tailIsInvariant.BoolVal), nil
+	tailIsInvariant, err := ti.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+	lhs, err := head.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+	rhs, err := second.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+
+	return values.NewBool(lhs.FloatVal > rhs.FloatVal && tailIsInvariant.BoolVal), nil
 }
 
-func greatThanOrImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func greatThanOrImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	if len(args) == 0 {
 		return values.NewBool(true), nil
 	}
 	if len(args) == 1 {
-		return values.NewBool(relationalCompareAllowed(args[0].Type)), nil
+		return values.NewBool(relationalCompareAllowed(args[0].Type())), nil
 	}
 	head := list.Car(args)
 	tail := list.Cdr(args)
 	second := list.Car(tail)
-	if !relationalCompareAllowed(head.Type) || !relationalCompareAllowed(second.Type) {
+	if !relationalCompareAllowed(head.Type()) || !relationalCompareAllowed(second.Type()) {
 		return values.NewBool(false), nil
 	}
-	tailIsInvariant, err := greatThanOrImpl(tail, env)
+	ti, err := greatThanOrImpl(tail, rt)
 	if err != nil {
 		return values.NewBool(false), err
 	}
-	return values.NewBool(head.FloatVal >= second.FloatVal && tailIsInvariant.BoolVal), nil
+	tailIsInvariant, err := ti.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+	lhs, err := head.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+	rhs, err := second.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+
+	return values.NewBool(lhs.FloatVal >= rhs.FloatVal && tailIsInvariant.BoolVal), nil
 }
 
-func equalImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func equalImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	if len(args) == 0 {
 		return values.NewBool(true), nil
 	}
 	if len(args) == 1 {
-		return values.NewBool(relationalCompareAllowed(args[0].Type)), nil
+		return values.NewBool(relationalCompareAllowed(args[0].Type())), nil
 	}
 	head := list.Car(args)
 	tail := list.Cdr(args)
 	second := list.Car(tail)
-	if !relationalCompareAllowed(head.Type) || !relationalCompareAllowed(second.Type) {
+	if !relationalCompareAllowed(head.Type()) || !relationalCompareAllowed(second.Type()) {
 		return values.NewBool(false), nil
 	}
-	tailIsInvariant, err := equalImpl(tail, env)
+	ti, err := equalImpl(tail, rt)
 	if err != nil {
 		return values.NewBool(false), err
 	}
-	return values.NewBool(head.FloatVal == second.FloatVal && tailIsInvariant.BoolVal), nil
+
+	tailIsInvariant, err := ti.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+	lhs, err := head.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+
+	rhs, err := second.AsPrimitive()
+	if err != nil {
+		return values.NewBool(false), err
+	}
+	return values.NewBool(lhs.FloatVal == rhs.FloatVal && tailIsInvariant.BoolVal), nil
 }
 
-func notImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func notImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	if len(args) != 1 {
 		return values.NewBool(false), ErrWrongNumberOfArguments
 	}
 	head := list.Car(args)
-	switch head.Type {
+	switch head.Type() {
 	case types.Bool:
-		return values.NewBool(!head.BoolVal), nil
+		h, err := head.AsPrimitive()
+		if err != nil {
+			return values.NewBool(false), err
+		}
+		return values.NewBool(!h.BoolVal), nil
 	default:
 		return values.NewBool(false), nil
 	}
@@ -212,69 +283,85 @@ func arithmeticAllowed(t types.Type) bool {
 	return slices.Contains(arithmeticAllowedTypes, t)
 }
 
-func sumImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func sumImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	if len(args) == 0 {
 		return values.NewInt(0), nil
 	}
 	if len(args) == 1 {
-		if !arithmeticAllowed(args[0].Type) {
+		if !arithmeticAllowed(args[0].Type()) {
 			return values.NewVoidType(), ErrNumberExpected
 		}
 		return args[0], nil
 	}
 
-	sum := values.NewInt(0)
+	sum := values.Primitive{}
+
 	for i := 0; i < len(args); i++ {
-		if arithmeticAllowed(args[i].Type) {
-			sum.FloatVal += args[i].FloatVal
-			sum.IntVal += args[i].IntVal
+		if arithmeticAllowed(args[i].Type()) {
+			rhs, err := args[i].AsPrimitive()
+			if err != nil {
+				return values.NewInt(0), err
+			}
+			sum.FloatVal += rhs.FloatVal
+			sum.IntVal += rhs.IntVal
 		} else {
 			return values.NewVoidType(), ErrNumberExpected
 		}
 	}
-	return sum, nil
+	return values.FromPrimitive(types.Int, sum), nil
 }
 
-func differenceImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func differenceImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	if len(args) == 0 {
 		return values.NewInt(0), nil
 	}
 	if len(args) == 1 {
-		if !arithmeticAllowed(args[0].Type) {
+		if !arithmeticAllowed(args[0].Type()) {
 			return values.NewVoidType(), ErrNumberExpected
 		}
 		return args[0], nil
 	}
-	diff := values.NewInt(0)
+	diff := values.Primitive{}
 	for i := 0; i < len(args); i++ {
-		if arithmeticAllowed(args[i].Type) {
-			diff.FloatVal -= args[i].FloatVal
-			diff.IntVal -= args[i].IntVal
+		if arithmeticAllowed(args[i].Type()) {
+			rhs, err := args[i].AsPrimitive()
+			if err != nil {
+				return values.NewInt(0), err
+			}
+			diff.FloatVal -= rhs.FloatVal
+			diff.IntVal -= rhs.IntVal
 		} else {
 			return values.NewVoidType(), ErrNumberExpected
 		}
 	}
-	return diff, nil
+	return values.FromPrimitive(types.Int, diff), nil
 }
 
-func productImpl(args []values.Value, env values.Environment) (values.Value, error) {
+func productImpl(args []values.Interface, rt *Runtime) (values.Interface, error) {
 	if len(args) == 0 {
 		return values.NewInt(0), nil
 	}
 	if len(args) == 1 {
-		if !arithmeticAllowed(args[0].Type) {
+		if !arithmeticAllowed(args[0].Type()) {
 			return values.NewVoidType(), ErrNumberExpected
 		}
 		return args[0], nil
 	}
-	product := values.NewInt(1)
+	product := values.Primitive{
+		IntVal:   1,
+		FloatVal: 1,
+	}
 	for i := 0; i < len(args); i++ {
-		if arithmeticAllowed(args[i].Type) {
-			product.FloatVal *= args[i].FloatVal
-			product.IntVal *= args[i].IntVal
+		if arithmeticAllowed(args[i].Type()) {
+			rhs, err := args[i].AsPrimitive()
+			if err != nil {
+				return values.NewInt(0), err
+			}
+			product.FloatVal *= rhs.FloatVal
+			product.IntVal *= rhs.IntVal
 		} else {
 			return values.NewVoidType(), ErrNumberExpected
 		}
 	}
-	return product, nil
+	return values.FromPrimitive(types.Int, product), nil
 }

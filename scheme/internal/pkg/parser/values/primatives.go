@@ -2,33 +2,33 @@ package values
 
 import "github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
 
-func NewVoidType() Value {
+func NewVoidType() Interface {
 	return Value{
-		Type: types.Void,
+		t: types.Void,
 	}
 }
 
-func NewIdentifier(name string) Value {
+func NewIdentifier(name string) Interface {
 	return Value{
-		Type: types.Identifier,
+		t: types.Identifier,
 		Primitive: Primitive{
 			NameVal: name,
 		},
 	}
 }
 
-func NewString(s string) Value {
+func NewString(s string) Interface {
 	return Value{
-		Type: types.String,
+		t: types.String,
 		Primitive: Primitive{
 			StringVal: s,
 		},
 	}
 }
 
-func NewInt(i int64) Value {
+func NewInt(i int64) Interface {
 	return Value{
-		Type: types.Int,
+		t: types.Int,
 		Primitive: Primitive{
 			IntVal:   i,
 			FloatVal: float64(i),
@@ -36,27 +36,27 @@ func NewInt(i int64) Value {
 	}
 }
 
-func NewBool(b bool) Value {
+func NewBool(b bool) Interface {
 	return Value{
-		Type: types.Bool,
+		t: types.Bool,
 		Primitive: Primitive{
 			BoolVal: b,
 		},
 	}
 }
 
-func NewChar(c rune) Value {
+func NewChar(c rune) Interface {
 	return Value{
-		Type: types.Char,
+		t: types.Char,
 		Primitive: Primitive{
-			CharVal: string(c),
+			CharVal: c,
 		},
 	}
 }
 
-func NewFloat(f float64) Value {
+func NewFloat(f float64) Interface {
 	return Value{
-		Type: types.Float,
+		t: types.Float,
 		Primitive: Primitive{
 			FloatVal: f,
 		},

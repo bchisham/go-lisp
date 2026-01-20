@@ -25,6 +25,7 @@ const (
 	TokenInt                TokenType = "int"
 	TokenString             TokenType = "string"
 	TokenBoolean            TokenType = "boolean"
+	TokenRune               TokenType = "rune"
 	TokenSymbol             TokenType = "symbol"
 	TokenIdent              TokenType = "ident"
 	TokenColonIdent         TokenType = "colon_ident"
@@ -107,7 +108,7 @@ func (s *Scanner) NextToken() (tok Token) {
 		case '+', '-', '*', '/', '%':
 			return s.consumeArithmeticOperatorOrNumber()
 		case '#':
-			return s.consumeBooleanLiteral()
+			return s.consumeLiteral()
 		}
 	}
 
@@ -270,7 +271,7 @@ func (s *Scanner) consumeArithmeticOperatorOrNumber() Token {
 	}
 }
 
-func (s *Scanner) consumeBooleanLiteral() Token {
+func (s *Scanner) consumeLiteral() Token {
 	_ = s.scan.Next() //#
 	if slices.Contains(list.New('t', 'f'), s.scan.Peek()) {
 		val := s.scan.Next()
@@ -278,6 +279,16 @@ func (s *Scanner) consumeBooleanLiteral() Token {
 			Type:    TokenBoolean,
 			Literal: "#" + string(val),
 			Bool:    val == 't',
+		}
+	} else if s.scan.Peek() == '\\' {
+		_ = s.scan.Next() //consume the '\'
+		charLiteral := s.scan.Next()
+
+		return Token{
+			Type:    TokenRune,
+			Literal: fmt.Sprintf("#\\%c", charLiteral),
+			Text:    string(charLiteral),
+			Int:     int64(charLiteral),
 		}
 	}
 	return Token{
