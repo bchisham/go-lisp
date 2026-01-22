@@ -126,6 +126,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cancelFunc()
 			}
 			return m, tea.Quit
+		case tea.KeyCtrlR:
+			// reverse search history
+			return m.handleReverseHistorySearch(tiCmd, vpCmd)
 		case tea.KeyEnter:
 			// run parser
 			return m.handleParserDispatch(msg, tiCmd, vpCmd)
@@ -222,14 +225,31 @@ func (m Model) handleScrollUpHistory(tiCmd, vpCmd tea.Cmd) (tea.Model, tea.Cmd) 
 		m.cursor = len(m.history) - 1
 		m.input = m.history[m.cursor]
 		m.cursor--
+	} else if m.cursor > 0 {
+		m.cursor--
+		m.input = m.history[m.cursor]
 	}
 	return m, tea.Batch(tiCmd, vpCmd)
 }
 
 func (m Model) handleScrollDownHistory(tiCmd, vpCmd tea.Cmd) (tea.Model, tea.Cmd) {
-	if m.cursor >= -1 && m.cursor < len(m.history)-1 {
+	if len(m.history) == 0 {
+		return m, tea.Batch(tiCmd, vpCmd)
+	}
+
+	if m.cursor == -1 {
+		// already at the editing buffer; nothing to do
+		return m, tea.Batch(tiCmd, vpCmd)
+	}
+
+	if m.cursor < len(m.history)-1 {
+		// move forward in history
 		m.cursor++
 		m.input = m.history[m.cursor]
+	} else {
+		// move past the most recent entry -> restore empty input
+		m.cursor = -1
+		m.input = ""
 	}
 	return m, tea.Batch(tiCmd, vpCmd)
 }
@@ -238,6 +258,25 @@ func (m Model) handleBackspace(tiCmd, vpCmd tea.Cmd) (tea.Model, tea.Cmd) {
 	if len(m.input) > 0 {
 		m.input = m.input[:len(m.input)-1]
 	}
+	return m, tea.Batch(tiCmd, vpCmd)
+}
+
+func (m Model) handleReverseHistorySearch(tiCmd, vpCmd tea.Cmd) (tea.Model, tea.Cmd) {
+	if len(m.history) == 0 {
+		return m, tea.Batch(tiCmd, vpCmd)
+	}
+	if m.cursor < 0 {
+		m.cursor = len(m.history) - 1
+	}
+	for i := len(m.history) - 1; i >= 0; i-- {
+		if strings.Contains(m.history[i], m.input) {
+			m.cursor = i
+			break
+		}
+	}
+
+	m.input = m.history[m.cursor]
+
 	return m, tea.Batch(tiCmd, vpCmd)
 }
 

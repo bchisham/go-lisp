@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/lexer"
-	"github.com/bchisham/go-lisp/scheme/internal/pkg/list"
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 )
 
@@ -75,7 +75,7 @@ func (p *Parser) SetPrompt(prompt string) {
 func (p *Parser) Eval(rt *Runtime) (values.Interface, error) {
 	val, err := EvalSExpression(p, rt)
 	p.exprnNo++
-	_, err = displayImpl(list.New(val), rt)
+	_, err = displayImpl(val, rt)
 	if err != nil {
 		_, _ = fmt.Fprintf(rt.Err, "Error %v\n", err)
 	}
@@ -105,7 +105,7 @@ func (p *Parser) Repl(rtOpts ...OptionRuntime) {
 				if err != nil {
 					_, _ = fmt.Fprintf(rt.Err, "Error %v\n", err)
 				}
-				_, err = displayImpl(list.New(val), rt)
+				_, err = displayImpl(val, rt)
 				if err != nil {
 					_, _ = fmt.Fprintf(rt.Err, "Error %v\n", err)
 				}
@@ -128,44 +128,75 @@ func EvalString(ctx context.Context, str string, rt *Runtime) (values.Interface,
 	p := New(ctx, lexer.New(bytes.NewBufferString(str)))
 	val, err := EvalSExpression(p, rt)
 	p.exprnNo++
-	_, err = displayImpl(list.New(val), rt)
+	_, err = displayImpl(val, rt)
 	if err != nil {
 		_, _ = fmt.Fprintf(rt.Err, "Error %v\n", err)
 	}
 	return val, err
 }
 
-func EvalSExpression(p *Parser, rt *Runtime) (values.Interface, error) {
-	tok := p.tokSrc.NextToken()
+func ReadDatum(p *Parser, rt *Runtime) (values.Interface, error) {
+	select {
+	case <-p.ctx.Done():
+		return values.NewVoidType(), p.ctx.Err()
+	default:
+		tok := p.tokSrc.NextToken()
 
-	var atoms []values.Interface
-	for ; tok.Type != lexer.TokenEOF; tok = p.tokSrc.NextToken() {
-		if p.verbose >= Debug {
-			_, _ = fmt.Fprintf(rt.Err, "Token Runtime: %v Token Literal: %v\n", tok.Type, tok.Literal)
-		}
-		switch tok.Type {
-		case lexer.TokenEOF:
-			return values.NewVoidType(), nil
-		case lexer.TokenError:
-			return values.NewVoidType(), ErrInvalidToken
-		case lexer.TokenLParen:
-			nestedExpr, err := EvalSExpression(p, rt)
-			if err != nil {
-				return values.NewVoidType(), err
+		var atoms = values.NewNil()
+		for ; tok.Type != lexer.TokenEOF; tok = p.tokSrc.NextToken() {
+			if p.verbose >= Debug {
+				_, _ = fmt.Fprintf(rt.Err, "Token Runtime: %v Token Literal: %v\n", tok.Type, tok.Literal)
 			}
-			atoms = append(atoms, nestedExpr)
-		case lexer.TokenQuot,
-			lexer.TokenIdent,
-			lexer.TokenInt,
-			lexer.TokenString,
-			lexer.TokenBoolean,
-			lexer.TokenRelationalOperator,
-			lexer.TokenArithmeticOperator:
-			atoms = append(atoms, values.FromToken(tok))
-		case lexer.TokenRParen:
-			goto eval
+			switch tok.Type {
+			case lexer.TokenQuot:
+				quotedExpr, err := ReadDatum(p, rt)
+				if err != nil {
+					return values.NewVoidType(), err
+				}
+				//quotPair := values.Cons(values.NewIdentifier("quot"), values.Cons(quotedExpr, values.NewNil()))
+				return values.Cons(values.NewQuotType(), quotedExpr), nil
+			case lexer.TokenEOF:
+				return values.NewVoidType(), nil
+			case lexer.TokenError:
+				return values.NewVoidType(), ErrInvalidToken
+			case lexer.TokenLParen:
+				nestedExpr, err := ReadDatum(p, rt)
+				if err != nil {
+					return values.NewVoidType(), err
+				}
+				if atoms.Type() == types.Nil {
+					atoms = nestedExpr
+					continue
+				}
+				atoms = values.Cons(nestedExpr, atoms)
+			case
+				lexer.TokenIdent,
+				lexer.TokenInt,
+				lexer.TokenString,
+				lexer.TokenBoolean,
+				lexer.TokenRelationalOperator,
+				lexer.TokenArithmeticOperator:
+				atoms = values.Cons(values.FromToken(tok), atoms)
+			case lexer.TokenRParen:
+				if atoms.Type() == types.Nil {
+					return values.NewNil(), nil
+				}
+				return values.Reverse(atoms), nil
+			default:
+				return values.NewVoidType(), ErrInvalidToken
+			}
 		}
+		if values.Cdr(atoms).Type() != types.Nil {
+			return atoms, nil
+		}
+		return values.Car(atoms), nil
 	}
-eval:
-	return evalSexpression(atoms, rt)
+}
+
+func EvalSExpression(p *Parser, rt *Runtime) (values.Interface, error) {
+	val, err := ReadDatum(p, rt)
+	if err != nil {
+		return values.NewVoidType(), err
+	}
+	return evalSexpression(val, rt)
 }

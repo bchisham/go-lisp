@@ -1,19 +1,14 @@
 package values
 
-import "github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
-
 func NewList(v ...Interface) Interface {
 	if len(v) == 0 {
-		return Value{
-			t:       types.List,
-			ListVal: []Interface{},
-		}
+		return NewNil()
 	}
-	if len(v) == 1 && v[0].Type() == types.List {
-		return v[0]
+
+	var list = NewNil()
+
+	for i := len(v) - 1; i >= 0; i-- {
+		list = Cons(v[i], list)
 	}
-	return Value{
-		t:       types.List,
-		ListVal: v,
-	}
+	return list
 }

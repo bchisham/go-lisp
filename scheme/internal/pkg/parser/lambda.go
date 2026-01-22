@@ -6,7 +6,7 @@ import (
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 )
 
-type Expression func(args []values.Interface, rt *Runtime) (values.Interface, error)
+type Expression func(args values.Interface, rt *Runtime) (values.Interface, error)
 
 type LambdaExpr struct {
 	Name     string
@@ -46,7 +46,7 @@ func (l LambdaExpr) GetToken() lexer.Token {
 }
 
 func NewExpression(env Environment, body []values.Value) Expression {
-	return func(args []values.Interface, rt *Runtime) (values.Interface, error) {
+	return func(args values.Interface, rt *Runtime) (values.Interface, error) {
 		//TODO evaluate body in environment
 		return values.NewVoidType(), nil
 	}
@@ -59,7 +59,7 @@ func NewLambda(rt *Runtime, expression Expression) values.Interface {
 	}
 }
 
-func (l LambdaExpr) Apply(args []values.Interface) (values.Interface, error) {
+func (l LambdaExpr) Apply(args values.Interface) (values.Interface, error) {
 	return l.Body(args, l.Runtime)
 }
 
@@ -67,6 +67,6 @@ func (l LambdaExpr) AsPrimitive() (values.Primitive, error) {
 	return values.Primitive{}, values.ErrNotAPrimitive
 }
 
-func (l LambdaExpr) Bool() bool {
+func (l LambdaExpr) IsTruthy() bool {
 	return true
 }

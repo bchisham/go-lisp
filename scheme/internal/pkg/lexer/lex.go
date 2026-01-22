@@ -26,6 +26,7 @@ const (
 	TokenString             TokenType = "string"
 	TokenBoolean            TokenType = "boolean"
 	TokenRune               TokenType = "rune"
+	TokenPair               TokenType = "pair"
 	TokenSymbol             TokenType = "symbol"
 	TokenIdent              TokenType = "ident"
 	TokenColonIdent         TokenType = "colon_ident"

@@ -18,6 +18,7 @@ import (
 var ErrNotAPrimitive = errors.New("not a primitive")
 
 type Primitive struct {
+	t         types.Type
 	BoolVal   bool
 	CharVal   rune
 	StringVal string
@@ -25,6 +26,102 @@ type Primitive struct {
 	FloatVal  float64
 	IntVal    int64
 	Literal   string
+}
+
+func (p2 Primitive) Equal(p Interface) bool {
+	if p2.Type() != p.Type() {
+		return false
+	}
+	o, ok := p.(Primitive)
+	if !ok {
+		return false
+	}
+	switch p2.Type() {
+	case types.Bool:
+		if p2.BoolVal != o.BoolVal {
+			return false
+		}
+	case types.Char:
+		if p2.CharVal != o.CharVal {
+			return false
+		}
+	case types.String:
+		if p2.StringVal != o.StringVal {
+			return false
+		}
+	case types.Float:
+		if p2.FloatVal != o.FloatVal {
+			return false
+		}
+	case types.Int:
+		if p2.IntVal != o.IntVal {
+			return false
+		}
+	case types.Identifier, types.RelationalOperator, types.ArithmeticOperator:
+		if p2.Literal != o.Literal {
+			return false
+		}
+	}
+	return true
+}
+
+func (p2 Primitive) Type() types.Type {
+	return p2.t
+}
+
+func (p2 Primitive) AsPrimitive() (Primitive, error) {
+	return p2, nil
+}
+
+func (p2 Primitive) IsTruthy() bool {
+	switch p2.Type() {
+	case types.Bool:
+		return p2.BoolVal
+	default:
+		return true
+	}
+}
+
+func (p2 Primitive) DisplayString() string {
+	switch p2.Type() {
+	case types.Bool:
+		return boolean.Trinary(p2.BoolVal, tokentypes.LiteralTrue, tokentypes.LiteralFalse)
+
+	case types.Char:
+		return string(p2.CharVal)
+
+	case types.String:
+		return p2.StringVal
+
+	case types.Float:
+		return strconv.FormatFloat(p2.FloatVal, 'g', -1, 64)
+
+	case types.Int:
+		return strconv.FormatInt(p2.IntVal, 10)
+	default:
+		return ""
+	}
+}
+
+func (p2 Primitive) WriteString() string {
+	switch p2.Type() {
+	case types.Bool:
+		return boolean.Trinary(p2.BoolVal, tokentypes.LiteralTrue, tokentypes.LiteralFalse)
+
+	case types.Char:
+		return writeChar(p2.CharVal)
+
+	case types.String:
+		return strconv.Quote(p2.StringVal)
+
+	case types.Float:
+		return strconv.FormatFloat(p2.FloatVal, 'g', -1, 64)
+
+	case types.Int:
+		return strconv.FormatInt(p2.IntVal, 10)
+	default:
+		return ""
+	}
 }
 
 type Value struct {
@@ -203,7 +300,7 @@ func (v Value) GetToken() lexer.Token {
 	return v.Token
 }
 
-func (v Value) Bool() bool {
+func (v Value) IsTruthy() bool {
 	switch v.Type() {
 	case types.Bool:
 		return v.BoolVal
@@ -230,7 +327,7 @@ func FromToken(tok lexer.Token) (v Interface) {
 	case lexer.TokenArithmeticOperator:
 		v = NewArithmeticOperator(tok.Literal)
 	}
-	v.SetToken(tok)
+
 	return
 }
 

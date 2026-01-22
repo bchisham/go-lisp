@@ -8,6 +8,8 @@ const (
 	Float              Type = "float"
 	Int                Type = "int"
 	List               Type = "list"
+	Pair               Type = "pair"
+	Nil                Type = "nil"
 	Lambda             Type = "lambda"
 	Map                Type = "map"
 	String             Type = "string"

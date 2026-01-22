@@ -16,8 +16,9 @@ const (
 	KwIf     = "if"
 )
 const (
-	LiteralTrue  = "#t"
-	LiteralFalse = "#f"
+	LiteralTrue    = "#t"
+	LiteralFalse   = "#f"
+	LiteralNilList = "()"
 )
 
 type RuneClassifier func(rune) bool

@@ -37,6 +37,8 @@ func (rt *Runtime) defaultEnvironment() {
 	rt.Env.Define(types.Format.String(), NewLambda(rt, formatImpl))
 	rt.Env.Define(types.Write.String(), NewLambda(rt, writeImpl))
 	rt.Env.Define(types.Display.String(), NewLambda(rt, displayImpl))
+	//quote
+	rt.Env.Define("quot", NewLambda(rt, quotImpl))
 	//relational operators
 	rt.Env.Define("<", NewLambda(rt, lessThanImpl))
 	rt.Env.Define("<=", NewLambda(rt, lessThanOrImpl))

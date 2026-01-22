@@ -42,11 +42,10 @@ func TestEvalSExpression(t *testing.T) {
 				p:  New(context.Background(), lexer.New(bytes.NewBufferString("'(1 2 3 4)"))),
 				rt: NewRuntime(WithOut(bytes.NewBuffer(nil))),
 			},
-			want: values.NewList(
-				values.NewInt(1),
-				values.NewInt(2),
-				values.NewInt(3),
-				values.NewInt(4)),
+			want: values.Cons(values.NewInt(1),
+				values.Cons(values.NewInt(2),
+					values.Cons(values.NewInt(3),
+						values.Cons(values.NewInt(4), values.NewNil())))),
 		},
 		{
 			name: "quot - literal",
