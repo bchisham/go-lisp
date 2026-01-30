@@ -12,6 +12,10 @@ func relationalCompareAllowed(t types.Type) bool {
 	return slices.Contains(list.New(types.Int, types.Float), t)
 }
 
+// LessThanImpl implements the < procedure
+// It returns #t if the arguments are in strictly increasing order
+// It returns #f if any argument is not a number
+// It returns #f if the arguments are not in strictly increasing order
 func LessThanImpl(args values.Interface, rt *Runtime, cb Expression) (_ values.Interface, err error) {
 	//https://try.scheme.org/ returns #t when there are no operands
 	if args.Type() == types.Nil {
@@ -51,6 +55,10 @@ func LessThanImpl(args values.Interface, rt *Runtime, cb Expression) (_ values.I
 	return values.NewBool(invariant), nil
 }
 
+// LessThanOrImpl implements the <= procedure
+// It returns #t if the arguments are in non-decreasing order
+// It returns #f if any argument is not a number
+// It returns #f if the arguments are not in non-decreasing order
 func LessThanOrImpl(args values.Interface, rt *Runtime, cb Expression) (values.Interface, error) {
 	if args.Type() == types.Nil {
 		return values.NewBool(true), nil
@@ -78,6 +86,10 @@ func LessThanOrImpl(args values.Interface, rt *Runtime, cb Expression) (values.I
 	return values.NewBool(invariant), nil
 }
 
+// GreatThanImpl implements the > procedure
+// It returns #t if the arguments are in strictly decreasing order
+// It returns #f if any argument is not a number
+// It returns #f if the arguments are not in strictly decreasing order
 func GreatThanImpl(args values.Interface, rt *Runtime, cb Expression) (values.Interface, error) {
 	if args.Type() == types.Nil {
 		return values.NewBool(true), nil
@@ -105,6 +117,10 @@ func GreatThanImpl(args values.Interface, rt *Runtime, cb Expression) (values.In
 	return values.NewBool(invariant), nil
 }
 
+// GreatThanOrImpl implements the >= procedure
+// It returns #t if the arguments are in non-increasing order
+// It returns #f if any argument is not a number
+// It returns #f if the arguments are not in non-increasing order
 func GreatThanOrImpl(args values.Interface, rt *Runtime, cb Expression) (values.Interface, error) {
 	if args.Type() == types.Nil {
 		return values.NewBool(true), nil
@@ -132,6 +148,9 @@ func GreatThanOrImpl(args values.Interface, rt *Runtime, cb Expression) (values.
 	return values.NewBool(invariant), nil
 }
 
+// EqualImpl implements the = procedure
+// It returns #t if all arguments are equal
+// It returns #f if any argument is not equal
 func EqualImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
 	if args.Type() == types.Nil {
 		return values.NewBool(true), nil
@@ -147,6 +166,9 @@ func EqualImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
 	return values.NewBool(true), nil
 }
 
+// QuotImpl implements the quot procedure
+// It returns the first argument if multiple arguments are provided
+// It returns the argument itself if a single argument is provided
 func QuotImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
 	if args.Type() == types.Pair {
 		return values.Car(args), nil
@@ -154,6 +176,9 @@ func QuotImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
 	return args, nil
 }
 
+// NotImpl implements the not procedure
+// It returns #t if the argument is false
+// It returns #f if the argument is true
 func NotImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
 	if args.Type() == types.Nil {
 		return values.NewBool(false), ErrWrongNumberOfArguments
