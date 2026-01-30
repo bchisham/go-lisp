@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/lexer"
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/builtins"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 )
@@ -72,19 +73,19 @@ func (p *Parser) SetPrompt(prompt string) {
 	p.prompt = prompt
 }
 
-func (p *Parser) Eval(rt *Runtime) (values.Interface, error) {
+func (p *Parser) Eval(rt *builtins.Runtime) (values.Interface, error) {
 	val, err := EvalSExpression(p, rt)
 	p.exprnNo++
-	_, err = displayImpl(val, rt)
+	_, err = builtins.DisplayImpl(val, rt)
 	if err != nil {
 		_, _ = fmt.Fprintf(rt.Err, "Error %v\n", err)
 	}
 	return val, err
 }
 
-func (p *Parser) Repl(rtOpts ...OptionRuntime) {
+func (p *Parser) Repl(rtOpts ...builtins.OptionRuntime) {
 
-	rt := NewRuntime(rtOpts...)
+	rt := builtins.NewRuntime(rtOpts...)
 	p.doPrompt(rt)
 	select {
 	case <-p.ctx.Done():
@@ -105,7 +106,7 @@ func (p *Parser) Repl(rtOpts ...OptionRuntime) {
 				if err != nil {
 					_, _ = fmt.Fprintf(rt.Err, "Error %v\n", err)
 				}
-				_, err = displayImpl(val, rt)
+				_, err = builtins.DisplayImpl(val, rt)
 				if err != nil {
 					_, _ = fmt.Fprintf(rt.Err, "Error %v\n", err)
 				}
@@ -116,7 +117,7 @@ func (p *Parser) Repl(rtOpts ...OptionRuntime) {
 	}
 }
 
-func (p *Parser) doPrompt(rt *Runtime) {
+func (p *Parser) doPrompt(rt *builtins.Runtime) {
 	if p.showExpressionCount && p.prompt != "" {
 		_, _ = fmt.Fprintf(rt.Out, "%d:%s", p.exprnNo, p.prompt)
 	} else if p.prompt != "" {
@@ -124,18 +125,18 @@ func (p *Parser) doPrompt(rt *Runtime) {
 	}
 }
 
-func EvalString(ctx context.Context, str string, rt *Runtime) (values.Interface, error) {
+func EvalString(ctx context.Context, str string, rt *builtins.Runtime) (values.Interface, error) {
 	p := New(ctx, lexer.New(bytes.NewBufferString(str)))
 	val, err := EvalSExpression(p, rt)
 	p.exprnNo++
-	_, err = displayImpl(val, rt)
+	_, err = builtins.DisplayImpl(val, rt)
 	if err != nil {
 		_, _ = fmt.Fprintf(rt.Err, "Error %v\n", err)
 	}
 	return val, err
 }
 
-func ReadDatum(p *Parser, rt *Runtime) (values.Interface, error) {
+func ReadDatum(p *Parser, rt *builtins.Runtime) (values.Interface, error) {
 	select {
 	case <-p.ctx.Done():
 		return values.NewVoidType(), p.ctx.Err()
@@ -154,7 +155,7 @@ func ReadDatum(p *Parser, rt *Runtime) (values.Interface, error) {
 					return values.NewVoidType(), err
 				}
 				//quotPair := values.Cons(values.NewIdentifier("quot"), values.Cons(quotedExpr, values.NewNil()))
-				return values.Cons(values.NewQuotType(), quotedExpr), nil
+				return values.Cons(values.NewQuot(values.NewNil()), quotedExpr), nil
 			case lexer.TokenEOF:
 				return values.NewVoidType(), nil
 			case lexer.TokenError:
@@ -193,7 +194,7 @@ func ReadDatum(p *Parser, rt *Runtime) (values.Interface, error) {
 	}
 }
 
-func EvalSExpression(p *Parser, rt *Runtime) (values.Interface, error) {
+func EvalSExpression(p *Parser, rt *builtins.Runtime) (values.Interface, error) {
 	val, err := ReadDatum(p, rt)
 	if err != nil {
 		return values.NewVoidType(), err

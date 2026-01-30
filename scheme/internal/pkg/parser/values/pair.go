@@ -7,9 +7,16 @@ import (
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
 )
 
+type Pair interface {
+	Interface
+	Car() Interface
+	Cdr() Interface
+}
+
 type pairVal struct {
-	Car Interface
-	Cdr Interface
+	truthyValue
+	car Interface
+	cdr Interface
 }
 
 func Cons(car, cdr Interface) Interface {
@@ -26,23 +33,33 @@ func Cons(car, cdr Interface) Interface {
 		panic("car cannot be nil if cdr is not nil")
 	}
 	return pairVal{
-		Car: car,
-		Cdr: cdr,
+		car: car,
+		cdr: cdr,
 	}
 }
 
 func Car(p Interface) Interface {
-	if pv, ok := p.(pairVal); ok {
-		return pv.Car
+	pair, ok := p.(pairVal)
+	if !ok {
+		panic("car called on non-pair")
 	}
-	return NilValue{}
+	return pair.Car()
 }
 
 func Cdr(p Interface) Interface {
-	if pv, ok := p.(pairVal); ok {
-		return pv.Cdr
+	pair, ok := p.(pairVal)
+	if !ok {
+		panic("cdr called on non-pair")
 	}
-	return NilValue{}
+	return pair.Cdr()
+}
+
+func (pr pairVal) Car() Interface {
+	return pr.car
+}
+
+func (pr pairVal) Cdr() Interface {
+	return pr.cdr
 }
 
 func Reverse(input Interface) (output Interface) {
@@ -53,11 +70,11 @@ func Reverse(input Interface) (output Interface) {
 		if !ok {
 			break
 		}
-		if pair.Cdr.Type() == types.Nil {
-			return Cons(pair.Car, output)
+		if pair.Cdr().Type() == types.Nil {
+			return Cons(pair.Car(), output)
 		}
-		output = Cons(pair.Car, output)
-		current = pair.Cdr
+		output = Cons(pair.Car(), output)
+		current = pair.Cdr()
 	}
 	return output
 }
@@ -67,10 +84,10 @@ func (pr pairVal) Equal(p Interface) bool {
 	if !ok {
 		return false
 	}
-	if !pr.Car.Equal(otherPair.Car) {
+	if !pr.Car().Equal(otherPair.Car()) {
 		return false
 	}
-	if !pr.Cdr.Equal(otherPair.Cdr) {
+	if !pr.Cdr().Equal(otherPair.Cdr()) {
 		return false
 	}
 	return true
@@ -88,33 +105,25 @@ func (pr pairVal) GetToken() lexer.Token {
 	}
 }
 
-func (pr pairVal) AsPrimitive() (Primitive, error) {
-	return Primitive{}, ErrNotAPrimitive
-}
-
-func (pr pairVal) IsTruthy() bool {
-	return true
-}
-
 func (pr pairVal) DisplayString() string {
 
-	if pr.Cdr.Type() == types.Nil {
-		return pr.Car.DisplayString()
+	if pr.Cdr().Type() == types.Nil {
+		return pr.Car().DisplayString()
 	}
 
 	sb := strings.Builder{}
 	sb.WriteString("(")
-	sb.WriteString(pr.Car.DisplayString())
+	sb.WriteString(pr.Car().DisplayString())
 
-	cdr := pr.Cdr
+	cdr := pr.Cdr()
 	for {
-		if _, ok := cdr.(NilValue); ok {
+		if _, ok := cdr.(Nil); ok {
 			break
 		}
 		if pair, ok := cdr.(pairVal); ok {
 			sb.WriteString(" ")
-			sb.WriteString(pair.Car.DisplayString())
-			cdr = pair.Cdr
+			sb.WriteString(pair.Car().DisplayString())
+			cdr = pair.Cdr()
 		} else {
 			sb.WriteString(" . ")
 			sb.WriteString(cdr.DisplayString())
@@ -127,23 +136,23 @@ func (pr pairVal) DisplayString() string {
 
 func (pr pairVal) WriteString() string {
 
-	if pr.Cdr.Type() == types.Nil {
-		return pr.Car.WriteString()
+	if pr.Cdr().Type() == types.Nil {
+		return pr.Car().WriteString()
 	}
 
 	sb := strings.Builder{}
 	sb.WriteString("(")
-	sb.WriteString(pr.Car.WriteString())
+	sb.WriteString(pr.Car().WriteString())
 
-	cdr := pr.Cdr
+	cdr := pr.Cdr()
 	for {
-		if _, ok := cdr.(NilValue); ok {
+		if _, ok := cdr.(Nil); ok {
 			break
 		}
 		if pair, ok := cdr.(pairVal); ok {
 			sb.WriteString(" ")
-			sb.WriteString(pair.Car.WriteString())
-			cdr = pair.Cdr
+			sb.WriteString(pair.Car().WriteString())
+			cdr = pair.Cdr()
 		} else {
 			sb.WriteString(" . ")
 			sb.WriteString(cdr.WriteString())

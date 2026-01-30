@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser"
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/builtins"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -32,7 +33,7 @@ type Model struct {
 	err            error
 	ctx            context.Context
 	cancelFunc     context.CancelFunc
-	runtime        *parser.Runtime
+	runtime        *builtins.Runtime
 	readFromParser io.Reader
 }
 
@@ -56,7 +57,7 @@ func InitialModel(prompt string) Model {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	runtime := parser.NewRuntime(parser.WithOut(os.Stdout))
+	runtime := builtins.NewRuntime(builtins.WithOut(os.Stdout))
 
 	// styles
 	inputStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("205"))

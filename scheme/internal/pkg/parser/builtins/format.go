@@ -1,4 +1,4 @@
-package parser
+package builtins
 
 import (
 	"fmt"
@@ -7,13 +7,14 @@ import (
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 )
 
-func displayImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
+func DisplayImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
 	if args == nil {
 		return values.NewVoidType(), ErrBadArgument
 	}
 	val := values.NewNil()
 	if args.Type() == types.Pair {
-		val = values.Car(args)
+		l := args.(values.Pair)
+		val = l.Car()
 	}
 	//TODO if cdr is not nil handle PORT implementation
 
@@ -24,14 +25,14 @@ func displayImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
 	return values.NewVoidType(), nil
 }
 
-func writeImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
+func WriteImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
 	if _, err := fmt.Fprintf(rt.Out, "%s", args.WriteString()); err != nil {
 		return values.NewVoidType(), ErrIo(err)
 	}
 	return values.NewVoidType(), nil
 }
 
-func formatImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
+func FormatImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
 	if _, err := fmt.Fprintf(rt.Out, "%s", args.DisplayString()); err != nil {
 		return values.NewVoidType(), ErrIo(err)
 	}

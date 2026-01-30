@@ -1,4 +1,4 @@
-package parser
+package builtins
 
 import (
 	"errors"

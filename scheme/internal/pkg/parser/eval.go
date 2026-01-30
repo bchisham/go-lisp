@@ -2,477 +2,154 @@ package parser
 
 import (
 	"errors"
-	"slices"
 
-	"github.com/bchisham/go-lisp/scheme/internal/pkg/list"
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/builtins"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 )
 
 // evalSexpression evaluate a S-Expression i the given environment.
-func evalSexpression(l values.Interface, rt *Runtime) (values.Interface, error) {
+func evalSexpression(l values.Interface, rt *builtins.Runtime) (values.Interface, error) {
 
-	switch l.Type() {
-	case types.Nil:
+	switch l.(type) {
+	case values.Nil:
 		return values.NewNil(), nil
-	case types.ArithmeticOperator, types.RelationalOperator:
-		p, err := l.AsPrimitive()
-		if err != nil {
-			return values.NewVoidType(), err
-		}
-		oper, ok := rt.Env.Lookup(p.Literal)
+	case values.Operator:
+		p, ok := l.(values.Operator)
 		if !ok {
 			return values.NewVoidType(), ErrOperatorIsNotAProcedure
 		}
-		lambda, ok := oper.(LambdaExpr)
+		oper, ok := rt.Env.Lookup(p.GetName())
+		if !ok {
+			return values.NewVoidType(), ErrOperatorIsNotAProcedure
+		}
+		lambda, ok := oper.(builtins.LambdaExpr)
 		if !ok {
 			return values.NewVoidType(), ErrOperatorIsNotAProcedure
 		}
 		return lambda.Apply(values.NewNil())
-	case types.Lambda:
-		lambda, ok := l.(LambdaExpr)
-		if !ok {
-			return values.NewVoidType(), ErrOperatorIsNotAProcedure
-		}
+	case builtins.LambdaExpr:
+		lambda := l.(builtins.LambdaExpr)
+
 		return lambda.Apply(values.NewNil())
-	case types.Quot:
+	case values.Quot:
 		return values.NewNil(), nil
-	case types.Identifier:
-		p, err := l.AsPrimitive()
-		if err != nil {
-			return values.NewVoidType(), err
-		}
-		resolvVal, ok := rt.Env.Lookup(p.NameVal)
+	case values.Identifier:
+		p, ok := l.(values.Identifier)
+		resolvVal, ok := rt.Env.Lookup(p.GetName())
 		if !ok {
 			return values.NewVoidType(), ErrUndefinedIdent
 		}
 		return resolvVal, nil
-	}
-
-	head := values.Car(l)
-	tail := values.Cdr(l)
-	switch head.Type() {
-	case types.Pair:
-		evaluatedHead, err := evalSexpression(head, rt)
-		if err != nil && !errors.Is(err, ErrOperatorIsNotAProcedure) {
-			return evaluatedHead, err
-		}
-		switch evaluatedHead.Type() {
-		case types.Identifier:
-			p, err := evaluatedHead.AsPrimitive()
-			if err != nil {
-				return values.NewVoidType(), err
+	case values.Pair:
+		// continue to S-Expression evaluation
+		lst := l.(values.Pair)
+		head := lst.Car()
+		tail := lst.Cdr()
+		switch head.(type) {
+		case values.Pair:
+			evaluatedHead, err := evalSexpression(head, rt)
+			if err != nil && !errors.Is(err, ErrOperatorIsNotAProcedure) {
+				return evaluatedHead, err
 			}
-			resvVal, ok := rt.Env.Lookup(p.NameVal)
+			switch evaluatedHead.(type) {
+			case values.Identifier:
+				p := evaluatedHead.(values.Identifier)
+				resvVal, ok := rt.Env.Lookup(p.GetName())
+				if !ok {
+					return values.NewVoidType(), ErrUndefinedIdent
+				}
+				_, userDefined := types.FromString(p.GetName())
+				switch resvVal.(type) {
+				case builtins.LambdaExpr:
+					if userDefined == nil {
+						lambda := resvVal.(builtins.LambdaExpr)
+						return lambda.Apply(tail)
+					}
+					return resvVal, nil
+				}
+			case values.Operator:
+				p := evaluatedHead.(values.Operator)
+				oper, ok := rt.Env.Lookup(p.GetName())
+				if !ok {
+					return values.NewVoidType(), ErrOperatorIsNotAProcedure
+				}
+				lambda, ok := oper.(builtins.Lambda)
+				return lambda.Apply(tail)
+			case builtins.Lambda:
+				lambda := evaluatedHead.(builtins.Lambda)
+				return lambda.Apply(tail)
+			case values.Quot:
+				return tail, nil
+			case values.Numeric, values.Boolean, values.String, values.Char:
+				if tail.Type() == types.Nil {
+					return evaluatedHead, nil
+				}
+				return evalSexpression(values.Cons(tail, evaluatedHead), rt)
+			default:
+				return evaluatedHead, ErrOperatorIsNotAProcedure
+			}
+		case values.Quot:
+			switch tail.Type() {
+			case types.Nil:
+				return values.NewNil(), ErrWrongNumberOfArguments
+			default:
+				return values.NewQuot(tail), nil
+			}
+		case values.Operator:
+			p := head.(values.Operator)
+			oper, ok := rt.Env.Lookup(p.GetName())
+			if !ok {
+				return values.NewVoidType(), ErrOperatorIsNotAProcedure
+			}
+			lambda, ok := oper.(builtins.LambdaExpr)
+			if !ok {
+				return values.NewVoidType(), ErrOperatorIsNotAProcedure
+			}
+			return lambda.Apply(tail)
+		case builtins.Lambda:
+			lambda := head.(builtins.LambdaExpr)
+			return lambda, nil
+		case values.Identifier:
+			p := head.(values.Identifier)
+			resolvVal, ok := rt.Env.Lookup(p.GetName())
 			if !ok {
 				return values.NewVoidType(), ErrUndefinedIdent
 			}
-			_, userDefined := types.FromString(p.NameVal)
-			switch resvVal.Type() {
-			case types.Lambda:
-				if userDefined == nil {
-					lambda, ok := resvVal.(LambdaExpr)
-					if !ok {
-						return values.NewNil(), ErrOperatorIsNotAProcedure
-					}
-					return lambda.Apply(tail)
-				}
-				return resvVal, nil
-
+			switch resolvVal.(type) {
+			case builtins.Lambda:
+				lambda := resolvVal.(builtins.Lambda)
+				return lambda.Apply(tail)
+			default:
+				return resolvVal, nil
 			}
-		case types.RelationalOperator, types.ArithmeticOperator:
-			p, err := evaluatedHead.AsPrimitive()
-			if err != nil {
-				return values.NewVoidType(), err
-			}
-			oper, ok := rt.Env.Lookup(p.Literal)
-			if !ok {
-				return values.NewVoidType(), ErrOperatorIsNotAProcedure
-			}
-			lambda, ok := oper.(LambdaExpr)
-
-			return lambda.Apply(tail)
-		case types.Lambda:
-			lambda, ok := evaluatedHead.(LambdaExpr)
-			if !ok {
-				return values.NewVoidType(), ErrOperatorIsNotAProcedure
-			}
-			return lambda.Apply(tail)
-		case types.Quot:
-			return tail, nil
 		default:
-			return evaluatedHead, ErrOperatorIsNotAProcedure
-		}
-	case types.Quot:
-		switch tail.Type() {
-		case types.Nil:
-			return values.NewNil(), ErrWrongNumberOfArguments
-		default:
-			return tail, nil
-		}
-	case types.RelationalOperator, types.ArithmeticOperator:
-		p, err := head.AsPrimitive()
-		if err != nil {
-			return values.NewVoidType(), err
-		}
-		oper, ok := rt.Env.Lookup(p.Literal)
-		if !ok {
-			return values.NewVoidType(), ErrOperatorIsNotAProcedure
-		}
-		lambda, ok := oper.(LambdaExpr)
-		if !ok {
-			return values.NewVoidType(), ErrOperatorIsNotAProcedure
-		}
-		return lambda.Apply(tail)
-	case types.Lambda:
-		lambda, ok := head.(LambdaExpr)
-		if !ok {
-			return values.NewVoidType(), ErrOperatorIsNotAProcedure
-		}
-		return lambda, nil
-
-	case types.Identifier:
-		p, err := head.AsPrimitive()
-		if err != nil {
-			return values.NewVoidType(), err
-		}
-		resolvVal, ok := rt.Env.Lookup(p.NameVal)
-		if !ok {
-			return values.NewVoidType(), ErrUndefinedIdent
-		}
-		if resolvVal.Type() == types.Lambda {
-			lambda, ok := resolvVal.(LambdaExpr)
-			if !ok {
-				return values.NewNil(), ErrOperatorIsNotAProcedure
+			if tail.Type() == types.Nil {
+				return head, nil
 			}
-			return lambda.Apply(tail)
 		}
-		return resolvVal, nil
 	default:
-		if tail.Type() == types.Nil {
-			return head, nil
-		}
-
+		return l, ErrOperatorIsNotAProcedure
 	}
 	return l, ErrOperatorIsNotAProcedure
 }
 
-func quotImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
-	if args.Type() == types.Pair {
-		return values.Car(args), nil
+func lookupProcedure(ident values.Identifier, rt *builtins.Runtime) (builtins.Lambda, error) {
+	resolvVal, ok := rt.Env.Lookup(ident.GetName())
+	if !ok {
+		return nil, ErrUndefinedIdent
 	}
-	return args, nil
+	lambda, ok := resolvVal.(builtins.Lambda)
+	if !ok {
+		return nil, ErrOperatorIsNotAProcedure
+	}
+	return lambda, nil
 }
 
-func relationalCompareAllowed(t types.Type) bool {
-	return slices.Contains(list.New(types.Int, types.Float), t)
-}
-
-func lessThanImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
-	//https://try.scheme.org/ returns #t when there are no operands
-	if args.Type() == types.Nil {
-		return values.NewBool(true), nil
+func lookupIdentifier(ident values.Identifier, rt *builtins.Runtime) (values.Interface, error) {
+	resolvVal, ok := rt.Env.Lookup(ident.GetName())
+	if !ok {
+		return values.NewVoidType(), ErrUndefinedIdent
 	}
-	head := values.Car(args)
-	tail := values.Cdr(args)
-	if tail.Type() == types.Nil {
-		return values.NewBool(relationalCompareAllowed(head.Type())), nil
-	}
-
-	second := values.Car(tail)
-
-	if !relationalCompareAllowed(head.Type()) ||
-		!relationalCompareAllowed(second.Type()) {
-		return values.NewBool(false), nil
-	}
-	ti, err := lessThanImpl(tail, rt)
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	tailIsInvariant, err := ti.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), nil
-	}
-
-	lhs, err := head.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	rhs, err := second.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-
-	return values.NewBool(lhs.FloatVal < rhs.FloatVal && tailIsInvariant.BoolVal), nil
-
-}
-
-func lessThanOrImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
-	if args.Type() == types.Nil {
-		return values.NewBool(true), nil
-	}
-	head := values.Car(args)
-	tail := values.Cdr(args)
-	if tail.Type() == types.Nil {
-		return values.NewBool(relationalCompareAllowed(head.Type())), nil
-	}
-
-	second := values.Car(tail)
-	if !relationalCompareAllowed(head.Type()) || !relationalCompareAllowed(second.Type()) {
-		return values.NewBool(false), nil
-	}
-	ti, err := lessThanOrImpl(tail, rt)
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	tailIsInvariant, err := ti.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	lhs, err := head.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	rhs, err := second.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-
-	return values.NewBool(lhs.FloatVal <= rhs.FloatVal && tailIsInvariant.BoolVal), nil
-}
-
-func greatThanImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
-	if args.Type() == types.Nil {
-		return values.NewBool(true), nil
-	}
-	head := values.Car(args)
-	tail := values.Cdr(args)
-	if tail.Type() == types.Nil {
-		return values.NewBool(relationalCompareAllowed(head.Type())), nil
-	}
-
-	second := values.Car(tail)
-	if !relationalCompareAllowed(head.Type()) ||
-		!relationalCompareAllowed(second.Type()) {
-		return values.NewBool(false), nil
-	}
-	ti, err := greatThanImpl(tail, rt)
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	tailIsInvariant, err := ti.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	lhs, err := head.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	rhs, err := second.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-
-	return values.NewBool(lhs.FloatVal > rhs.FloatVal && tailIsInvariant.BoolVal), nil
-}
-
-func greatThanOrImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
-	if args.Type() == types.Nil {
-		return values.NewBool(true), nil
-	}
-	head := values.Car(args)
-	tail := values.Cdr(args)
-	if tail.Type() == types.Nil {
-		return values.NewBool(relationalCompareAllowed(head.Type())), nil
-	}
-
-	second := values.Car(tail)
-	if !relationalCompareAllowed(head.Type()) || !relationalCompareAllowed(second.Type()) {
-		return values.NewBool(false), nil
-	}
-	ti, err := greatThanOrImpl(tail, rt)
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	tailIsInvariant, err := ti.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	lhs, err := head.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	rhs, err := second.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-
-	return values.NewBool(lhs.FloatVal >= rhs.FloatVal && tailIsInvariant.BoolVal), nil
-}
-
-func equalImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
-	if args.Type() == types.Nil {
-		return values.NewBool(true), nil
-	}
-	head := values.Car(args)
-	tail := values.Cdr(args)
-	if tail.Type() == types.Nil {
-		return values.NewBool(relationalCompareAllowed(head.Type())), nil
-	}
-
-	second := values.Car(tail)
-	if !relationalCompareAllowed(head.Type()) || !relationalCompareAllowed(second.Type()) {
-		return values.NewBool(false), nil
-	}
-	ti, err := equalImpl(tail, rt)
-	if err != nil {
-		return values.NewBool(false), err
-	}
-
-	tailIsInvariant, err := ti.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	lhs, err := head.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-
-	rhs, err := second.AsPrimitive()
-	if err != nil {
-		return values.NewBool(false), err
-	}
-	return values.NewBool(lhs.FloatVal == rhs.FloatVal && tailIsInvariant.BoolVal), nil
-}
-
-func notImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
-	if args.Type() == types.Nil {
-		return values.NewBool(false), ErrWrongNumberOfArguments
-	}
-	return values.NewBool(!values.Car(args).IsTruthy()), nil
-}
-
-var arithmeticAllowedTypes = list.New(types.Int, types.Float)
-
-func arithmeticAllowed(t types.Type) bool {
-	return slices.Contains(arithmeticAllowedTypes, t)
-}
-
-func sumImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
-	if args.Type() == types.Nil {
-		return values.NewInt(0), nil
-	}
-	head := values.Car(args)
-	tail := values.Cdr(args)
-	sum := values.Primitive{}
-	if tail.Type() == types.Nil {
-		if !arithmeticAllowed(head.Type()) {
-			return values.NewNil(), ErrNumberExpected
-		}
-		return head, nil
-	}
-	ti, err := sumImpl(tail, rt)
-	if err != nil {
-		return values.NewNil(), err
-	}
-	tailSum, err := ti.AsPrimitive()
-	if err != nil {
-		return values.NewNil(), err
-	}
-	lhs, err := head.AsPrimitive()
-	if err != nil {
-		return values.NewNil(), err
-	}
-	if !arithmeticAllowed(head.Type()) {
-		return values.NewNil(), ErrNumberExpected
-	}
-	sum.FloatVal = lhs.FloatVal + tailSum.FloatVal
-	sum.IntVal = lhs.IntVal + tailSum.IntVal
-
-	return values.FromPrimitive(types.Int, sum), nil
-}
-
-func differenceImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
-	if args.Type() == types.Nil {
-		return values.NewInt(0), nil
-	}
-	head := values.Car(args)
-	tail := values.Cdr(args)
-	if tail.Type() == types.Nil {
-		if !arithmeticAllowed(head.Type()) {
-			return values.NewNil(), ErrNumberExpected
-		}
-		return head, nil
-	}
-	diff := values.Primitive{}
-	lhs, err := head.AsPrimitive()
-	if err != nil {
-		return values.NewNil(), err
-	}
-	second := values.Car(tail)
-	if !arithmeticAllowed(head.Type()) || !arithmeticAllowed(second.Type()) {
-		return values.NewNil(), ErrNumberExpected
-	}
-	rhs, err := second.AsPrimitive()
-	if err != nil {
-		return values.NewNil(), err
-	}
-	diff.FloatVal = lhs.FloatVal - rhs.FloatVal
-	diff.IntVal = lhs.IntVal - rhs.IntVal
-
-	ti, err := differenceImpl(tail, rt)
-	if err != nil {
-		return values.NewNil(), err
-	}
-	tailDiff, err := ti.AsPrimitive()
-	if err != nil {
-		return values.NewNil(), err
-	}
-	diff.FloatVal -= tailDiff.FloatVal
-	diff.IntVal -= tailDiff.IntVal
-	return values.FromPrimitive(types.Int, diff), nil
-}
-
-func productImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
-	if args.Type() == types.Nil {
-		return values.NewInt(0), nil
-	}
-	head := values.Car(args)
-	tail := values.Cdr(args)
-	if tail.Type() == types.Nil {
-		if !arithmeticAllowed(head.Type()) {
-			return values.NewNil(), ErrNumberExpected
-		}
-		return head, nil
-	}
-	product := values.Primitive{
-		IntVal:   1,
-		FloatVal: 1,
-	}
-	lhs, err := head.AsPrimitive()
-	if err != nil {
-		return values.NewNil(), err
-	}
-	second := values.Car(tail)
-	if !arithmeticAllowed(head.Type()) || !arithmeticAllowed(second.Type()) {
-		return values.NewNil(), ErrNumberExpected
-	}
-	rhs, err := second.AsPrimitive()
-	if err != nil {
-		return values.NewNil(), err
-	}
-	product.FloatVal = lhs.FloatVal * rhs.FloatVal
-	product.IntVal = lhs.IntVal * rhs.IntVal
-
-	ti, err := productImpl(tail, rt)
-	if err != nil {
-		return values.NewNil(), err
-	}
-	tailProduct, err := ti.AsPrimitive()
-	if err != nil {
-		return values.NewNil(), err
-	}
-	product.FloatVal *= tailProduct.FloatVal
-	product.IntVal *= tailProduct.IntVal
-	return values.FromPrimitive(types.Int, product), nil
+	return resolvVal, nil
 }

@@ -1,9 +1,13 @@
-package parser
+package builtins
 
 import (
 	"io"
 	"os"
+
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 )
+
+type EvaluatorCallback Expression
 
 type Runtime struct {
 	Out io.Writer
@@ -12,9 +16,10 @@ type Runtime struct {
 }
 
 type configRuntime struct {
-	out io.Writer
-	err io.Writer
-	env Environment
+	out      io.Writer
+	err      io.Writer
+	env      Environment
+	callback Expression
 }
 
 type OptionRuntime func(*configRuntime)
@@ -37,11 +42,20 @@ func WithErr(err io.Writer) OptionRuntime {
 	}
 }
 
+func WithEvaluatorCallback(cb Expression) OptionRuntime {
+	return func(c *configRuntime) {
+		c.callback = cb
+	}
+}
+
 func defaultConfig() configRuntime {
 	return configRuntime{
 		out: os.Stdout,
 		err: os.Stderr,
 		env: NewEnvironment(),
+		callback: func(v values.Interface, runtime *Runtime) (values.Interface, error) {
+			return v, nil
+		},
 	}
 }
 
@@ -55,6 +69,6 @@ func NewRuntime(opt ...OptionRuntime) *Runtime {
 		Err: cfg.err,
 		Env: cfg.env,
 	}
-	rt.defaultEnvironment()
+	rt.defaultEnvironment(cfg.callback)
 	return rt
 }

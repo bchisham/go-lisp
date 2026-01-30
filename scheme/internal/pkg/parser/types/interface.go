@@ -18,4 +18,18 @@ const (
 	Quot               Type = "quot"
 	RelationalOperator Type = "relationalOperator"
 	ArithmeticOperator Type = "arithmeticOperator"
+	BooleanOperator    Type = "booleanOperator"
 )
+
+type TypeGate func(t Type) bool
+
+func NewTypeGate(allowedTypes ...Type) TypeGate {
+	return func(t Type) bool {
+		for _, at := range allowedTypes {
+			if t == at {
+				return true
+			}
+		}
+		return false
+	}
+}

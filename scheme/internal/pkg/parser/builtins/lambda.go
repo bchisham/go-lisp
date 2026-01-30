@@ -1,10 +1,15 @@
-package parser
+package builtins
 
 import (
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/lexer"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 )
+
+type Lambda interface {
+	values.Interface
+	Apply(args values.Interface) (values.Interface, error)
+}
 
 type Expression func(args values.Interface, rt *Runtime) (values.Interface, error)
 
@@ -41,11 +46,7 @@ func (l LambdaExpr) SetToken(token lexer.Token) {
 	l.srcToken = token
 }
 
-func (l LambdaExpr) GetToken() lexer.Token {
-	return l.srcToken
-}
-
-func NewExpression(env Environment, body []values.Value) Expression {
+func NewExpression(env Environment, body []values.Interface) Expression {
 	return func(args values.Interface, rt *Runtime) (values.Interface, error) {
 		//TODO evaluate body in environment
 		return values.NewVoidType(), nil
@@ -61,10 +62,6 @@ func NewLambda(rt *Runtime, expression Expression) values.Interface {
 
 func (l LambdaExpr) Apply(args values.Interface) (values.Interface, error) {
 	return l.Body(args, l.Runtime)
-}
-
-func (l LambdaExpr) AsPrimitive() (values.Primitive, error) {
-	return values.Primitive{}, values.ErrNotAPrimitive
 }
 
 func (l LambdaExpr) IsTruthy() bool {

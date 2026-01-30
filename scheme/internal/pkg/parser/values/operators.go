@@ -2,9 +2,34 @@ package values
 
 import "github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
 
+type Operator interface {
+	Interface
+	IsArithmetic() bool
+	IsRelational() bool
+	IsBoolean() bool
+	GetName() string
+}
+
 type operatorValue struct {
+	truthyValue
 	t       types.Type
 	Literal string
+}
+
+func (o operatorValue) IsArithmetic() bool {
+	return o.Type() == types.ArithmeticOperator
+}
+
+func (o operatorValue) IsRelational() bool {
+	return o.Type() == types.RelationalOperator
+}
+
+func (o operatorValue) IsBoolean() bool {
+	return o.Type() == types.BooleanOperator
+}
+
+func (o operatorValue) GetName() string {
+	return o.Literal
 }
 
 func (o operatorValue) Equal(p Interface) bool {
@@ -25,28 +50,12 @@ func (o operatorValue) Type() types.Type {
 	return o.t
 }
 
-func (o operatorValue) AsPrimitive() (Primitive, error) {
-	return Primitive{
-		Literal: o.Literal,
-	}, nil
-}
-
-func (o operatorValue) IsTruthy() bool {
-	return true
-}
-
 func (o operatorValue) DisplayString() string {
 	return o.Literal
 }
 
 func (o operatorValue) WriteString() string {
 	return o.Literal
-}
-
-func NewQuotType() Interface {
-	return operatorValue{
-		t: types.Quot,
-	}
 }
 
 func NewRelationalOperator(literal string) Interface {
