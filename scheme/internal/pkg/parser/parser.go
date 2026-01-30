@@ -201,3 +201,9 @@ func EvalSExpression(p *Parser, rt *builtins.Runtime) (values.Interface, error) 
 	}
 	return evalSexpression(val, rt)
 }
+
+func DefaultExpressionEvaluator() builtins.Expression {
+	return func(expr values.Interface, rt *builtins.Runtime) (values.Interface, error) {
+		return evalSexpression(expr, rt)
+	}
+}

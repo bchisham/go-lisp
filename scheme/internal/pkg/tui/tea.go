@@ -57,7 +57,9 @@ func InitialModel(prompt string) Model {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	runtime := builtins.NewRuntime(builtins.WithOut(os.Stdout))
+	runtime := builtins.NewRuntime(
+		builtins.WithOut(os.Stdout),
+		builtins.WithEvaluatorCallback(parser.DefaultExpressionEvaluator()))
 
 	// styles
 	inputStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
@@ -110,9 +112,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.viewport.Width = msg.Width
 		m.textarea.SetWidth(msg.Width)
-		m.viewport.Height = msg.Height - m.textarea.Height() - lipgloss.Height(strings.Repeat("\n", 5))
+		m.viewport.Height = msg.Height - m.textarea.Height() -
+			lipgloss.Height(strings.Repeat("\n", 5))
 		if len(m.outputs) > 0 {
-			m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(m.outputs, "\n")))
+			m.viewport.SetContent(
+				lipgloss.NewStyle().
+					Width(m.viewport.Width).
+					Render(strings.Join(m.outputs, "\n")))
 		}
 		m.viewport.GotoBottom()
 
@@ -154,12 +160,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) handleEvalComplete(msg EvalCompleteMsg, tiCmd, vpCmd tea.Cmd) (tea.Model, tea.Cmd) {
 	now := time.Now()
 	if msg.err != nil {
-		m.outputs = append(m.outputs, fmt.Sprintf("%s Error: %s", now.Format(time.Kitchen), msg.err.Error()))
+		m.outputs = append(m.outputs,
+			fmt.Sprintf("%s Error: %s", now.Format(time.Kitchen),
+				msg.err.Error()))
 	}
 	//if msg.result != nil {
 	//	m.outputs = append(m.outputs, "Result: "+boolean.Trinary(msg.result.Type() == types.Void, "#void", msg.result.String()))
 	//}
-	m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(m.outputs, "\n")))
+	m.viewport.SetContent(
+		lipgloss.
+			NewStyle().Width(m.viewport.Width).
+			Render(strings.Join(m.outputs, "\n")))
 	m.viewport.GotoBottom()
 	m.input = ""
 	m.cursor = -1
@@ -169,7 +180,9 @@ func (m Model) handleEvalComplete(msg EvalCompleteMsg, tiCmd, vpCmd tea.Cmd) (te
 func (m Model) handleParserIoAvailable(msg ParserIoAvailable, tiCmd, vpCmd tea.Cmd) (tea.Model, tea.Cmd) {
 	now := time.Now()
 	if msg.content != "" {
-		m.outputs = append(m.outputs, fmt.Sprintf("%s Output: %s", now.Format(time.Kitchen), msg.content))
+		m.outputs = append(m.outputs,
+			fmt.Sprintf("%s Output: %s",
+				now.Format(time.Kitchen), msg.content))
 		m.viewport.SetContent(lipgloss.NewStyle().
 			Width(m.viewport.Width).
 			Render(strings.Join(m.outputs, "\n")))

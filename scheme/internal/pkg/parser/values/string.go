@@ -39,11 +39,11 @@ func (s stringValue) Type() types.Type {
 }
 
 func (s stringValue) DisplayString() string {
-	return fmt.Sprintf("%q", s.value)
+	return fmt.Sprintf("%s", s.value)
 }
 
 func (s stringValue) WriteString() string {
-	return fmt.Sprintf("%s", s.value)
+	return fmt.Sprintf("%q", s.value)
 }
 
 func (s stringValue) String() string {

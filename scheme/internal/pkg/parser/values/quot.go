@@ -20,11 +20,11 @@ func (q quotValue) IsTruthy() bool {
 }
 
 func (q quotValue) DisplayString() string {
-	return "'" + q.value.DisplayString()
+	return q.value.DisplayString()
 }
 
 func (q quotValue) WriteString() string {
-	return "'" + q.value.WriteString()
+	return q.value.WriteString()
 }
 
 func NewQuotValue(value Interface) Interface {

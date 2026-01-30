@@ -166,7 +166,7 @@ func (s *Scanner) consumeString() (_ Token) {
 	if quotChar == scanner.String {
 		quotChar = '"'
 	}
-	sb.WriteRune(quotChar)
+	//sb.WriteRune(quotChar)
 
 	for ch := s.scan.Peek(); ch != scanner.EOF && ch != scanner.String; ch = s.scan.Peek() {
 		if ch == quotChar {
@@ -176,7 +176,7 @@ func (s *Scanner) consumeString() (_ Token) {
 		content.WriteRune(s.scan.Next())
 		sb.WriteRune(ch)
 	}
-	sb.WriteRune(quotChar)
+	//sb.WriteRune(quotChar)
 
 	return Token{
 		Type:    TokenString,

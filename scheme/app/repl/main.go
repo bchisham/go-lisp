@@ -8,6 +8,7 @@ import (
 
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/lexer"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser"
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/builtins"
 )
 
 func main() {
@@ -53,6 +54,6 @@ func main() {
 		parser.WithShowExpressionCount(true),
 		parser.WithVerbose(parser.VerboseLevel(debugLevel)))
 
-	p.Repl()
+	p.Repl(builtins.WithEvaluatorCallback(parser.DefaultExpressionEvaluator()))
 
 }
