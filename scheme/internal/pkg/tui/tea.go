@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	"strings"
+
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/builtins"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
@@ -14,8 +16,6 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-
-	"strings"
 )
 
 type Model struct {
@@ -28,6 +28,7 @@ type Model struct {
 	history        []string
 	outputs        []string
 	input          string
+	pendingCommand strings.Builder
 	prompt         string
 	cursor         int
 	err            error
@@ -35,6 +36,7 @@ type Model struct {
 	cancelFunc     context.CancelFunc
 	runtime        *builtins.Runtime
 	readFromParser io.Reader
+	openParens     int
 }
 
 func (m Model) Init() tea.Cmd {
@@ -62,10 +64,16 @@ func InitialModel(prompt string) Model {
 		builtins.WithEvaluatorCallback(parser.DefaultExpressionEvaluator()))
 
 	// styles
-	inputStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	headingStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("69"))
-	prevInputStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	outputStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+	inputStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("205"))
+	headingStyle := lipgloss.NewStyle().
+		BorderBottom(true).
+		Bold(true).
+		Foreground(lipgloss.Color("69"))
+	prevInputStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240"))
+	outputStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("250"))
 
 	return Model{
 		viewport:       vp,
@@ -80,9 +88,9 @@ func InitialModel(prompt string) Model {
 		prevInputStyle: prevInputStyle,
 		outputStyle:    outputStyle,
 		runtime:        runtime,
-
-		ctx:        ctx,
-		cancelFunc: cancel,
+		openParens:     0,
+		ctx:            ctx,
+		cancelFunc:     cancel,
 		//readFromParser: pr,
 	}
 }
@@ -136,9 +144,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlR:
 			// reverse search history
 			return m.handleReverseHistorySearch(tiCmd, vpCmd)
+		case tea.KeyCtrlS:
+			userCmd := m.pendingCommand.String()
+			if userCmd == "" {
+				return m, tea.Batch(tiCmd, vpCmd)
+			}
+
+			if m.input != "" {
+				userCmd += " " + m.input + "\n"
+			}
+			if m.pendingCommand.Len() > 0 {
+				m.pendingCommand.Reset()
+			}
+			m.input = ""
+			return m.handleParserDispatch(userCmd, tiCmd, vpCmd)
 		case tea.KeyEnter:
 			// run parser
-			return m.handleParserDispatch(msg, tiCmd, vpCmd)
+			return m.handleLineOfCommandEntered(m.input, tiCmd, vpCmd)
 		case tea.KeyUp:
 			return m.handleScrollUpHistory(tiCmd, vpCmd)
 		case tea.KeyDown:
@@ -164,9 +186,7 @@ func (m Model) handleEvalComplete(msg EvalCompleteMsg, tiCmd, vpCmd tea.Cmd) (te
 			fmt.Sprintf("%s Error: %s", now.Format(time.Kitchen),
 				msg.err.Error()))
 	}
-	//if msg.result != nil {
-	//	m.outputs = append(m.outputs, "Result: "+boolean.Trinary(msg.result.Type() == types.Void, "#void", msg.result.String()))
-	//}
+
 	m.viewport.SetContent(
 		lipgloss.
 			NewStyle().Width(m.viewport.Width).
@@ -174,6 +194,19 @@ func (m Model) handleEvalComplete(msg EvalCompleteMsg, tiCmd, vpCmd tea.Cmd) (te
 	m.viewport.GotoBottom()
 	m.input = ""
 	m.cursor = -1
+	return m, tea.Batch(tiCmd, vpCmd)
+}
+
+func (m Model) handleLineOfCommandEntered(msg string, tiCmd, vpCmd tea.Cmd) (tea.Model, tea.Cmd) {
+	openParens := strings.Count(msg, "(")
+	closeParens := strings.Count(msg, ")")
+	m.openParens += openParens - closeParens
+
+	m.history = append(m.history, msg)
+	m.pendingCommand.WriteString(" ")
+	m.pendingCommand.WriteString(msg)
+	m.pendingCommand.WriteString("\n")
+	m.input = ""
 	return m, tea.Batch(tiCmd, vpCmd)
 }
 
@@ -193,15 +226,14 @@ func (m Model) handleParserIoAvailable(msg ParserIoAvailable, tiCmd, vpCmd tea.C
 	return m, tea.Batch(tiCmd, vpCmd)
 }
 
-func (m Model) handleParserDispatch(msg tea.Msg, tiCmd, vpCmd tea.Cmd) (tea.Model, tea.Cmd) {
+func (m Model) handleParserDispatch(msg string, tiCmd, vpCmd tea.Cmd) (tea.Model, tea.Cmd) {
 	var (
 		runParserCmd, updateParseResultCmd tea.Cmd
 	)
-	userInput := m.input
 	pr, pw := io.Pipe()
 	runParserCmd = func() tea.Msg {
 		m.runtime.Out = pw
-		val, err := parser.EvalString(m.ctx, userInput, m.runtime)
+		val, err := parser.EvalString(m.ctx, msg, m.runtime)
 		return EvalCompleteMsg{result: val, err: err}
 	}
 	updateParseResultCmd = func() tea.Msg {
@@ -224,7 +256,7 @@ func (m Model) handleParserDispatch(msg tea.Msg, tiCmd, vpCmd tea.Cmd) (tea.Mode
 	}
 	now := time.Now()
 	m.history = append(m.history, m.input)
-	m.outputs = append(m.outputs, fmt.Sprintf("%s Executed: %s", now.Format(time.Kitchen), m.input))
+	m.outputs = append(m.outputs, fmt.Sprintf("%s Executed: %s", now.Format(time.Kitchen), msg))
 	m.viewport.
 		SetContent(lipgloss.NewStyle().
 			Width(m.viewport.Width).
@@ -298,41 +330,61 @@ type (
 	errMsg error
 )
 
-func (m Model) renderOutputs(width int) string {
-	var styled []string
-	for _, line := range m.outputs {
-		switch {
-		case strings.Contains(line, "Executed:"):
-			styled = append(styled, m.prevInputStyle.Width(width).Render(line))
-		case strings.Contains(line, "Output:"):
-			styled = append(styled, m.outputStyle.Width(width).Render(line))
-		case strings.Contains(line, "Error:"):
-			// errors can be emphasized
-			errStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("160"))
-			styled = append(styled, errStyle.Width(width).Render(line))
-		default:
-			styled = append(styled, lipgloss.NewStyle().Width(width).Render(line))
-		}
-	}
-	return strings.Join(styled, "\n")
-}
-
 func (m Model) View() string {
 	var historyStr strings.Builder
-	historyStr.WriteString(m.headingStyle.Render("------------- History --------") + "\n")
+	sep := lipgloss.NewStyle().BorderBottom(true).Width(m.textarea.Width())
+	colsPerParen := 2 // spaces per open paren (tweak as needed)
+	//indentCols := m.openParens * colsPerParen
+	indentStyle := m.prevInputStyle
+	historyStr.WriteString(m.headingStyle.Width(m.textarea.Width()).Render("------------- History --------") + "\n")
+	var openParensCount int
+	//m.renderOutputs(m.textarea.Width())
+	indentCols := 0
+	openParensCount = 0
 	for _, cmd := range m.outputs {
 		// apply a simple style in View as well
 		if strings.Contains(cmd, "Executed:") {
-			historyStr.WriteString(m.prevInputStyle.Render(cmd) + "\n")
-		} else if strings.Contains(cmd, "Output:") {
+			// keep the prefix (timestamp and "Executed:") and indent the command body
+			idx := strings.Index(cmd, "Executed:")
+			if idx >= 0 {
+				prefix := cmd[:idx+len("Executed:")]
+				body := strings.TrimSpace(cmd[idx+len("Executed:"):])
+				if body != "" {
+					openParensCount += strings.Count(body, "(") - strings.Count(body, ")")
+					indentCols += openParensCount * colsPerParen
+
+					historyStr.WriteString(prefix + "\n" + indentStyle.PaddingLeft(indentCols).Render(body) + "\n")
+				} else {
+					historyStr.WriteString(prefix + "\n")
+				}
+				continue
+			}
+		}
+
+		if strings.Contains(cmd, "Output:") {
 			historyStr.WriteString(m.outputStyle.Render(cmd) + "\n")
 		} else {
 			historyStr.WriteString(cmd + "\n")
 		}
 	}
+
+	m.viewport.SetContent(historyStr.String())
+	m.viewport.GotoBottom()
+
 	historyStr.WriteString("\n")
-	historyStr.WriteString(m.headingStyle.Render("------------- Input ----------") + "\n")
+	historyStr.WriteString(m.headingStyle.Width(m.textarea.Width()).Render("------------- Input ----------") + "\n")
 	historyStr.WriteString("\n")
+
+	pending := strings.TrimSuffix(m.pendingCommand.String(), "\n")
+	pendingLine := strings.Split(pending, "\n")
+	openParensCount = 0
+	for _, line := range pendingLine {
+		openParensCount += strings.Count(line, "(") - strings.Count(line, ")")
+		indentCount := openParensCount * colsPerParen
+		historyStr.WriteString(indentStyle.PaddingLeft(indentCount).Width(m.textarea.Width()).Render(line) + "\n")
+	}
+
+	historyStr.WriteString(sep.Width(m.textarea.Width()).Render("") + "\n")
 	historyStr.WriteString(m.inputStyle.Render(m.prompt + " " + m.input))
 	return historyStr.String()
 }
