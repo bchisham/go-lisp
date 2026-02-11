@@ -18,6 +18,7 @@ var (
 	ErrWrongNumberOfArguments  = errors.New("wrong number of arguments")
 	ErrNumberExpected          = errors.New("number expected")
 	ErrDivideByZero            = errors.New("divide by zero")
+	ErrIllFormedSpecialForm    = errors.New("ill-formed special form")
 	ErrTypeMismatch            = errors.New("type mismatch")
 )
 

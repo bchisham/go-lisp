@@ -3,7 +3,7 @@ package values
 import "github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
 
 type Operator interface {
-	Interface
+	Type
 	IsArithmetic() bool
 	IsRelational() bool
 	IsBoolean() bool
@@ -32,7 +32,7 @@ func (o operatorValue) GetName() string {
 	return o.Literal
 }
 
-func (o operatorValue) Equal(p Interface) bool {
+func (o operatorValue) Equal(p Type) bool {
 	if o.Type() != p.Type() {
 		return false
 	}
@@ -58,14 +58,14 @@ func (o operatorValue) WriteString() string {
 	return o.Literal
 }
 
-func NewRelationalOperator(literal string) Interface {
+func NewRelationalOperator(literal string) Type {
 	return operatorValue{
 		t:       types.RelationalOperator,
 		Literal: literal,
 	}
 }
 
-func NewArithmeticOperator(literal string) Interface {
+func NewArithmeticOperator(literal string) Type {
 	return operatorValue{
 		t:       types.ArithmeticOperator,
 		Literal: literal,

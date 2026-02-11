@@ -96,7 +96,7 @@ func InitialModel(prompt string) Model {
 }
 
 type EvalCompleteMsg struct {
-	result values.Interface
+	result values.Type
 	err    error
 }
 

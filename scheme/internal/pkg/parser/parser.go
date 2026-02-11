@@ -73,7 +73,7 @@ func (p *Parser) SetPrompt(prompt string) {
 	p.prompt = prompt
 }
 
-func (p *Parser) Eval(rt *builtins.Runtime) (values.Interface, error) {
+func (p *Parser) Eval(rt *builtins.Runtime) (values.Type, error) {
 	val, err := EvalSExpression(p, rt)
 	p.exprnNo++
 	_, err = builtins.DisplayImpl(val, rt)
@@ -125,7 +125,7 @@ func (p *Parser) doPrompt(rt *builtins.Runtime) {
 	}
 }
 
-func EvalString(ctx context.Context, str string, rt *builtins.Runtime) (values.Interface, error) {
+func EvalString(ctx context.Context, str string, rt *builtins.Runtime) (values.Type, error) {
 	p := New(ctx, lexer.New(bytes.NewBufferString(str)))
 	val, err := EvalSExpression(p, rt)
 	p.exprnNo++
@@ -136,40 +136,53 @@ func EvalString(ctx context.Context, str string, rt *builtins.Runtime) (values.I
 	return val, err
 }
 
-func ReadDatum(p *Parser, rt *builtins.Runtime) (values.Interface, error) {
+type structParseState struct {
+	depth       int
+	currentType lexer.TokenType
+	lastToken   lexer.Token
+}
+
+func (s *structParseState) enterDepth(currentType lexer.TokenType, lastToken lexer.Token) structParseState {
+	return structParseState{
+		depth:       s.depth + 1,
+		currentType: currentType,
+		lastToken:   lastToken,
+	}
+}
+
+func ReadDatum(p *Parser, rt *builtins.Runtime) (values.Type, error) {
+	return readDatum(p, rt, structParseState{})
+}
+
+func readDatum(p *Parser, rt *builtins.Runtime, state structParseState) (values.Type, error) {
 	select {
 	case <-p.ctx.Done():
 		return values.NewVoidType(), p.ctx.Err()
 	default:
 		tok := p.tokSrc.NextToken()
-
 		var atoms = values.NewNil()
+		lastToken := lexer.Token{}
 		for ; tok.Type != lexer.TokenEOF; tok = p.tokSrc.NextToken() {
 			if p.verbose >= Debug {
 				_, _ = fmt.Fprintf(rt.Err, "Token Runtime: %v Token Literal: %v\n", tok.Type, tok.Literal)
 			}
 			switch tok.Type {
 			case lexer.TokenQuot:
-				quotedExpr, err := ReadDatum(p, rt)
+				quotedExpr, err := readDatum(p, rt, state.enterDepth(tok.Type, lastToken))
 				if err != nil {
 					return values.NewVoidType(), err
 				}
-				//quotPair := values.Cons(values.NewIdentifier("quot"), values.Cons(quotedExpr, values.NewNil()))
 				return values.Cons(values.NewQuot(values.NewNil()), quotedExpr), nil
 			case lexer.TokenEOF:
 				return values.NewVoidType(), nil
 			case lexer.TokenError:
 				return values.NewVoidType(), ErrInvalidToken
 			case lexer.TokenLParen:
-				nestedExpr, err := ReadDatum(p, rt)
+				nestedExpr, err := readDatum(p, rt, state.enterDepth(tok.Type, lastToken))
 				if err != nil {
 					return values.NewVoidType(), err
 				}
-				if atoms.Type() == types.Nil {
-					atoms = nestedExpr
-					continue
-				}
-				atoms = values.Cons(nestedExpr, atoms)
+				atoms = values.Append(atoms, nestedExpr)
 			case
 				lexer.TokenIdent,
 				lexer.TokenInt,
@@ -177,24 +190,25 @@ func ReadDatum(p *Parser, rt *builtins.Runtime) (values.Interface, error) {
 				lexer.TokenBoolean,
 				lexer.TokenRelationalOperator,
 				lexer.TokenArithmeticOperator:
-				atoms = values.Cons(values.FromToken(tok), atoms)
+				atoms = values.Append(atoms, values.FromToken(tok))
 			case lexer.TokenRParen:
 				if atoms.Type() == types.Nil {
 					return values.NewNil(), nil
 				}
-				return values.Reverse(atoms), nil
+				return atoms, nil //values.Reverse(atoms), nil
 			default:
 				return values.NewVoidType(), ErrInvalidToken
 			}
+			lastToken = tok
 		}
 		if values.Cdr(atoms).Type() != types.Nil {
 			return atoms, nil
 		}
-		return values.Car(atoms), nil
+		return atoms, nil
 	}
 }
 
-func EvalSExpression(p *Parser, rt *builtins.Runtime) (values.Interface, error) {
+func EvalSExpression(p *Parser, rt *builtins.Runtime) (values.Type, error) {
 	val, err := ReadDatum(p, rt)
 	if err != nil {
 		return values.NewVoidType(), err
@@ -203,7 +217,7 @@ func EvalSExpression(p *Parser, rt *builtins.Runtime) (values.Interface, error) 
 }
 
 func DefaultExpressionEvaluator() builtins.Expression {
-	return func(expr values.Interface, rt *builtins.Runtime) (values.Interface, error) {
+	return func(expr values.Type, rt *builtins.Runtime) (values.Type, error) {
 		return evalSexpression(expr, rt)
 	}
 }

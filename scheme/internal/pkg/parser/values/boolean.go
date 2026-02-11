@@ -8,11 +8,11 @@ import (
 )
 
 type Boolean interface {
-	Interface
+	Type
 	GetLiteral() bool
 }
 
-func NewBool(b bool) Interface {
+func NewBool(b bool) Type {
 	return booleanValue{
 		Literal: b,
 	}
@@ -22,7 +22,7 @@ type booleanValue struct {
 	Literal bool
 }
 
-func (b booleanValue) Equal(p Interface) bool {
+func (b booleanValue) Equal(p Type) bool {
 	if b.Type() != p.Type() {
 		return false
 	}

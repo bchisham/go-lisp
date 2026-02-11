@@ -7,11 +7,11 @@ import (
 )
 
 type String interface {
-	Interface
+	Type
 	fmt.Stringer
 }
 
-func NewString(value string) Interface {
+func NewString(value string) Type {
 	return stringValue{value: value}
 }
 
@@ -20,7 +20,7 @@ type stringValue struct {
 	value string
 }
 
-func (s stringValue) Equal(p Interface) bool {
+func (s stringValue) Equal(p Type) bool {
 	if s.Type() != p.Type() {
 		return false
 	}

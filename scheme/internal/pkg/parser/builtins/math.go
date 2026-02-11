@@ -9,7 +9,7 @@ var ArithmeticAllowedGate = types.NewTypeGate(types.Int, types.Float)
 
 // evalToNumber evaluates val using the evaluationCallback if it is not already a numeric type.
 // It returns the evaluated numeric value or an error if the value is not numeric.
-func evalToNumber(val values.Interface, rt *Runtime, evaluationCallback Expression) (values.Numeric, error) {
+func evalToNumber(val values.Type, rt *Runtime, evaluationCallback Expression) (values.Numeric, error) {
 	if ArithmeticAllowedGate(val.Type()) {
 		num, ok := val.(values.Numeric)
 		if !ok {
@@ -33,7 +33,7 @@ func evalToNumber(val values.Interface, rt *Runtime, evaluationCallback Expressi
 }
 
 // SumImpl computes the sum of all numeric arguments in args.
-func SumImpl(args values.Interface, rt *Runtime, evaluationCallback Expression) (_ values.Interface, err error) {
+func SumImpl(args values.Type, rt *Runtime, evaluationCallback Expression) (_ values.Type, err error) {
 	if args.Type() == types.Nil {
 		return values.NewInt(0), nil
 	}
@@ -59,7 +59,7 @@ func SumImpl(args values.Interface, rt *Runtime, evaluationCallback Expression) 
 
 // DifferenceImpl computes the difference of all numeric arguments in args.
 // It subtracts each subsequent number from the first.
-func DifferenceImpl(args values.Interface, rt *Runtime, evaluationCallback Expression) (_ values.Interface, err error) {
+func DifferenceImpl(args values.Type, rt *Runtime, evaluationCallback Expression) (_ values.Type, err error) {
 	if args.Type() == types.Nil {
 		return values.NewInt(0), nil
 	}
@@ -82,7 +82,7 @@ func DifferenceImpl(args values.Interface, rt *Runtime, evaluationCallback Expre
 
 // ProductImpl computes the product of all numeric arguments in args.
 // It multiplies each number together.
-func ProductImpl(args values.Interface, rt *Runtime, evaluationCallback Expression) (_ values.Interface, err error) {
+func ProductImpl(args values.Type, rt *Runtime, evaluationCallback Expression) (_ values.Type, err error) {
 	if args.Type() == types.Nil {
 		return values.NewInt(1), nil
 	}
@@ -106,7 +106,7 @@ func ProductImpl(args values.Interface, rt *Runtime, evaluationCallback Expressi
 
 // QuotientImpl computes the quotient of all numeric arguments in args.
 // It divides the first number by each subsequent number in order.
-func QuotientImpl(args values.Interface, rt *Runtime, evaluationCallback Expression) (_ values.Interface, err error) {
+func QuotientImpl(args values.Type, rt *Runtime, evaluationCallback Expression) (_ values.Type, err error) {
 	if args.Type() == types.Nil {
 		return values.NewNil(), ErrWrongNumberOfArguments
 	}
@@ -139,7 +139,7 @@ func QuotientImpl(args values.Interface, rt *Runtime, evaluationCallback Express
 }
 
 // RemainderImpl computes the remainder of the division of the first numeric argument by each subsequent numeric argument in args.
-func RemainderImpl(args values.Interface, rt *Runtime, evaluationCallback Expression) (_ values.Interface, err error) {
+func RemainderImpl(args values.Type, rt *Runtime, evaluationCallback Expression) (_ values.Type, err error) {
 	if args.Type() == types.Nil {
 		return values.NewNil(), ErrWrongNumberOfArguments
 	}

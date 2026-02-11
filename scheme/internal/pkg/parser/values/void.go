@@ -2,7 +2,7 @@ package values
 
 import "github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
 
-func NewVoidType() Interface {
+func NewVoidType() Type {
 	return void{}
 }
 
@@ -10,7 +10,7 @@ type void struct {
 	truthyValue
 }
 
-func (v void) Equal(p Interface) bool {
+func (v void) Equal(p Type) bool {
 	_, ok := p.(void)
 	return ok
 }

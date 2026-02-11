@@ -18,7 +18,7 @@ func TestEvalSExpression(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    values.Interface
+		want    values.Type
 		wantErr bool
 	}{
 		{
@@ -263,6 +263,24 @@ func TestEvalSExpression(t *testing.T) {
 			},
 			want: values.NewInt(16),
 		},
+		{
+			name: "define global variable",
+			args: args{
+				p: New(context.Background(), lexer.New(bytes.NewBufferString("(define x 42)"))),
+				rt: builtins.NewRuntime(builtins.WithOut(bytes.NewBuffer(nil)),
+					builtins.WithEvaluatorCallback(evalSexpression)),
+			},
+			want: values.NewVoidType(),
+		},
+		{
+			name: "let binding",
+			args: args{
+				p: New(context.Background(), lexer.New(bytes.NewBufferString("(let ((x 10) (y 20)) (+ x y))"))),
+				rt: builtins.NewRuntime(builtins.WithOut(bytes.NewBuffer(nil)),
+					builtins.WithEvaluatorCallback(evalSexpression)),
+			},
+			want: values.NewInt(30),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -273,6 +291,136 @@ func TestEvalSExpression(t *testing.T) {
 			}
 			if !got.Equal(tt.want) {
 				t.Errorf("EvalSExpression() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReadDatum(t *testing.T) {
+	type args struct {
+		p  *Parser
+		rt *builtins.Runtime
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    values.Type
+		wantErr bool
+	}{
+		{
+			name: "read int",
+			args: args{
+				p: New(context.Background(), lexer.New(bytes.NewBufferString("42"))),
+				rt: builtins.NewRuntime(builtins.WithOut(bytes.NewBuffer(nil)),
+					builtins.WithEvaluatorCallback(evalSexpression)),
+			},
+			want: values.NewInt(42),
+		},
+		{
+			name: "read string",
+			args: args{
+				p: New(context.Background(), lexer.New(bytes.NewBufferString("\"hello world\""))),
+				rt: builtins.NewRuntime(builtins.WithOut(bytes.NewBuffer(nil)),
+					builtins.WithEvaluatorCallback(evalSexpression)),
+			},
+			want: values.NewString("hello world"),
+		},
+		{
+			name: "read list",
+			args: args{
+				p: New(context.Background(), lexer.New(bytes.NewBufferString("(1 2 3 4)"))),
+				rt: builtins.NewRuntime(builtins.WithOut(bytes.NewBuffer(nil)),
+					builtins.WithEvaluatorCallback(evalSexpression)),
+			},
+			want: values.Cons(values.NewInt(1),
+				values.Cons(values.NewInt(2),
+					values.Cons(values.NewInt(3),
+						values.Cons(values.NewInt(4), values.NewNil())))),
+		},
+		{
+			name: "read nested list",
+			args: args{
+				p: New(context.Background(), lexer.New(bytes.NewBufferString("((1 2) (3 4))"))),
+				rt: builtins.NewRuntime(builtins.WithOut(bytes.NewBuffer(nil)),
+					builtins.WithEvaluatorCallback(evalSexpression)),
+			},
+			want: values.Cons(
+				values.Cons(values.NewInt(1), values.Cons(values.NewInt(2), values.NewNil())),
+				values.Cons(
+					values.Cons(values.NewInt(3), values.Cons(values.NewInt(4), values.NewNil())),
+					values.NewNil(),
+				),
+			),
+		},
+		{
+			name: "read quoted list",
+			args: args{
+				p: New(context.Background(), lexer.New(bytes.NewBufferString("'(1 2 3)"))),
+				rt: builtins.NewRuntime(builtins.WithOut(bytes.NewBuffer(nil)),
+					builtins.WithEvaluatorCallback(evalSexpression)),
+			},
+			want: values.NewQuotValue(values.Cons(values.NewInt(1),
+				values.Cons(values.NewInt(2),
+					values.Cons(values.NewInt(3), values.NewNil())))),
+		},
+		{
+			name: "read quoted nested list",
+			args: args{
+				p: New(context.Background(), lexer.New(bytes.NewBufferString("'((1 2) (3 4))"))),
+				rt: builtins.NewRuntime(builtins.WithOut(bytes.NewBuffer(nil)),
+					builtins.WithEvaluatorCallback(evalSexpression)),
+			},
+			want: values.NewQuotValue(values.Cons(
+				values.Cons(values.NewInt(1), values.Cons(values.NewInt(2), values.NewNil())),
+				values.Cons(
+					values.Cons(values.NewInt(3), values.Cons(values.NewInt(4), values.NewNil())),
+					values.NewNil(),
+				),
+			)),
+		},
+		{
+			name: "read empty list",
+			args: args{
+				p: New(context.Background(), lexer.New(bytes.NewBufferString("()"))),
+				rt: builtins.NewRuntime(builtins.WithOut(bytes.NewBuffer(nil)),
+					builtins.WithEvaluatorCallback(evalSexpression)),
+			},
+			want: values.NewNil(),
+		},
+		{
+			name: "read let expression",
+			args: args{
+				p: New(context.Background(), lexer.New(bytes.NewBufferString("(let ((x 10) (y 20)) (+ x y))"))),
+				rt: builtins.NewRuntime(builtins.WithOut(bytes.NewBuffer(nil)),
+					builtins.WithEvaluatorCallback(evalSexpression)),
+			},
+			want: values.Cons(
+				values.NewIdentifier("let"),
+				values.Cons(
+					values.Cons(
+						values.Cons(values.NewIdentifier("x"), values.Cons(values.NewInt(10), values.NewNil())),
+						values.Cons(
+							values.Cons(values.NewIdentifier("y"), values.Cons(values.NewInt(20), values.NewNil())),
+							values.NewNil(),
+						),
+					),
+					values.Cons(
+						values.Cons(values.NewArithmeticOperator("+"), values.Cons(values.NewIdentifier("x"), values.Cons(values.NewIdentifier("y"), values.NewNil()))),
+						values.NewNil(),
+					),
+				),
+			),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ReadDatum(tt.args.p, tt.args.rt)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ReadDatum() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.want.Equal(got) {
+				t.Errorf("ReadDatum() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

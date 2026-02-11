@@ -3,11 +3,11 @@ package values
 import "github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
 
 type Identifier interface {
-	Interface
+	Type
 	GetName() string
 }
 
-func NewIdentifier(name string) Interface {
+func NewIdentifier(name string) Type {
 	return identifierValue{
 		Literal: name,
 	}
@@ -22,7 +22,7 @@ type identifierValue struct {
 	Literal string
 }
 
-func (i identifierValue) Equal(p Interface) bool {
+func (i identifierValue) Equal(p Type) bool {
 	if i.Type() != p.Type() {
 		return false
 	}

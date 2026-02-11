@@ -8,18 +8,18 @@ import (
 )
 
 type Pair interface {
-	Interface
-	Car() Interface
-	Cdr() Interface
+	Type
+	Car() Type
+	Cdr() Type
 }
 
 type pairVal struct {
 	truthyValue
-	car Interface
-	cdr Interface
+	car Type
+	cdr Type
 }
 
-func Cons(car, cdr Interface) Interface {
+func Cons(car, cdr Type) Type {
 	if car == nil {
 		panic("car cannot be nil")
 	}
@@ -38,31 +38,44 @@ func Cons(car, cdr Interface) Interface {
 	}
 }
 
-func Car(p Interface) Interface {
+func Car(p Type) Type {
 	pair, ok := p.(pairVal)
 	if !ok {
-		panic("car called on non-pair")
+		return NewNil()
 	}
 	return pair.Car()
 }
 
-func Cdr(p Interface) Interface {
+func Cdr(p Type) Type {
 	pair, ok := p.(pairVal)
 	if !ok {
-		panic("cdr called on non-pair")
+		return NewNil()
 	}
 	return pair.Cdr()
 }
 
-func (pr pairVal) Car() Interface {
+func Append(head Type, value Type) (out Type) {
+	if head.Type() == types.Nil {
+		return Cons(value, head)
+	}
+	switch head.Type() {
+	case types.Pair:
+		out = Cons(Car(head), Append(Cdr(head), value))
+	default:
+		out = Cons(head, value)
+	}
+	return out
+}
+
+func (pr pairVal) Car() Type {
 	return pr.car
 }
 
-func (pr pairVal) Cdr() Interface {
+func (pr pairVal) Cdr() Type {
 	return pr.cdr
 }
 
-func Reverse(input Interface) (output Interface) {
+func Reverse(input Type) (output Type) {
 	output = NewNil()
 	current := input
 	for {
@@ -79,18 +92,41 @@ func Reverse(input Interface) (output Interface) {
 	return output
 }
 
-func (pr pairVal) Equal(p Interface) bool {
-	otherPair, ok := p.(pairVal)
+func (pr pairVal) Equal(p Type) bool {
+	otherPair, ok := p.(Pair)
 	if !ok {
 		return false
 	}
-	if !pr.Car().Equal(otherPair.Car()) {
-		return false
+
+	a := Pair(pr)
+	b := otherPair
+
+	for {
+		// compare current elements
+		if !a.Car().Equal(b.Car()) {
+			return false
+		}
+
+		aCdr := a.Cdr()
+		bCdr := b.Cdr()
+
+		aNext, aIsPair := aCdr.(Pair)
+		bNext, bIsPair := bCdr.(Pair)
+
+		// if neither cdr is a Pair (likely both Nil or immediate values), compare directly
+		if !aIsPair && !bIsPair {
+			return aCdr.Equal(bCdr)
+		}
+
+		// if one is a Pair and the other is not, lengths/structure differ
+		if aIsPair != bIsPair {
+			return false
+		}
+
+		// advance both lists
+		a = aNext
+		b = bNext
 	}
-	if !pr.Cdr().Equal(otherPair.Cdr()) {
-		return false
-	}
-	return true
 
 }
 

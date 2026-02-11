@@ -6,7 +6,7 @@ import (
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/values"
 )
 
-func DisplayImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
+func DisplayImpl(args values.Type, rt *Runtime) (values.Type, error) {
 	if args == nil {
 		return values.NewVoidType(), ErrBadArgument
 	}
@@ -19,14 +19,14 @@ func DisplayImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
 	return values.NewVoidType(), nil
 }
 
-func WriteImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
+func WriteImpl(args values.Type, rt *Runtime) (values.Type, error) {
 	if _, err := fmt.Fprintf(rt.Out, "%s", args.WriteString()); err != nil {
 		return values.NewVoidType(), ErrIo(err)
 	}
 	return values.NewVoidType(), nil
 }
 
-func FormatImpl(args values.Interface, rt *Runtime) (values.Interface, error) {
+func FormatImpl(args values.Type, rt *Runtime) (values.Type, error) {
 	if _, err := fmt.Fprintf(rt.Out, "%s", args.DisplayString()); err != nil {
 		return values.NewVoidType(), ErrIo(err)
 	}

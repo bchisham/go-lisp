@@ -8,7 +8,7 @@ type Nil struct {
 	truthyValue
 }
 
-func NewNil() Interface {
+func NewNil() Type {
 	return Nil{}
 }
 
@@ -16,7 +16,7 @@ func (n Nil) String() string {
 	return "()"
 }
 
-func (n Nil) Equal(p Interface) bool {
+func (n Nil) Equal(p Type) bool {
 	_, ok := p.(Nil)
 	return ok
 }

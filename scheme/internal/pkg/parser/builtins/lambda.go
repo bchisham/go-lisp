@@ -7,11 +7,11 @@ import (
 )
 
 type Lambda interface {
-	values.Interface
-	Apply(args values.Interface) (values.Interface, error)
+	values.Type
+	Apply(args values.Type) (values.Type, error)
 }
 
-type Expression func(args values.Interface, rt *Runtime) (values.Interface, error)
+type Expression func(args values.Type, rt *Runtime) (values.Type, error)
 
 type LambdaExpr struct {
 	Name     string
@@ -33,7 +33,7 @@ func (l LambdaExpr) String() string {
 
 }
 
-func (l LambdaExpr) Equal(p values.Interface) bool {
+func (l LambdaExpr) Equal(p values.Type) bool {
 
 	return false
 }
@@ -46,24 +46,28 @@ func (l LambdaExpr) SetToken(token lexer.Token) {
 	l.srcToken = token
 }
 
-func NewExpression(env Environment, body []values.Interface) Expression {
-	return func(args values.Interface, rt *Runtime) (values.Interface, error) {
+func NewExpression(env Environment, body values.Type) Expression {
+	return func(args values.Type, rt *Runtime) (values.Type, error) {
 		//TODO evaluate body in environment
 		return values.NewVoidType(), nil
 	}
 }
 
-func NewLambda(rt *Runtime, expression Expression) values.Interface {
+func NewLambda(rt *Runtime, expression Expression) values.Type {
 	return LambdaExpr{
 		Runtime: rt,
 		Body:    expression,
 	}
 }
 
-func (l LambdaExpr) Apply(args values.Interface) (values.Interface, error) {
+func (l LambdaExpr) Apply(args values.Type) (values.Type, error) {
 	return l.Body(args, l.Runtime)
 }
 
 func (l LambdaExpr) IsTruthy() bool {
 	return true
+}
+
+func lambdaImpl(args values.Type, rt *Runtime, evalCallBack Expression) (values.Type, error) {
+	return NewLambda(rt, NewExpression(rt.Env, args)), nil
 }

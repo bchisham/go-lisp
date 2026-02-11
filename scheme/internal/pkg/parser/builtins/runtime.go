@@ -53,7 +53,7 @@ func defaultConfig() configRuntime {
 		out: os.Stdout,
 		err: os.Stderr,
 		env: NewEnvironment(),
-		callback: func(v values.Interface, runtime *Runtime) (values.Interface, error) {
+		callback: func(v values.Type, runtime *Runtime) (values.Type, error) {
 			return v, nil
 		},
 	}
@@ -71,4 +71,13 @@ func NewRuntime(opt ...OptionRuntime) *Runtime {
 	}
 	rt.defaultEnvironment(cfg.callback)
 	return rt
+}
+
+func (rt *Runtime) ExtendEnvironment() *Runtime {
+	newEnv := ExtendEnvironment(rt.Env)
+	return &Runtime{
+		Out: rt.Out,
+		Err: rt.Err,
+		Env: newEnv,
+	}
 }

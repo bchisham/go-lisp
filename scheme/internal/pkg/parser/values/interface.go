@@ -4,8 +4,8 @@ import (
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
 )
 
-type Interface interface {
-	Equal(p Interface) bool
+type Type interface {
+	Equal(p Type) bool
 	Type() types.Type
 	IsTruthy() bool
 	DisplayString() string
@@ -13,7 +13,7 @@ type Interface interface {
 }
 
 type Numeric interface {
-	Interface
+	Type
 	IsInteger() bool
 	IsFloat() bool
 	AsFloat() (float64, error)

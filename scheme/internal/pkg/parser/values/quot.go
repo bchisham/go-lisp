@@ -3,15 +3,15 @@ package values
 import "github.com/bchisham/go-lisp/scheme/internal/pkg/parser/types"
 
 type Quot interface {
-	Interface
-	GetValue() Interface
+	Type
+	GetValue() Type
 }
 
 type quotValue struct {
-	value Interface
+	value Type
 }
 
-func NewQuot(value Interface) Quot {
+func NewQuot(value Type) Quot {
 	return quotValue{value: value}
 }
 
@@ -27,14 +27,14 @@ func (q quotValue) WriteString() string {
 	return q.value.WriteString()
 }
 
-func NewQuotValue(value Interface) Interface {
+func NewQuotValue(value Type) Type {
 	return quotValue{value: value}
 }
 
-func (q quotValue) GetValue() Interface {
+func (q quotValue) GetValue() Type {
 	return q.value
 }
-func (q quotValue) Equal(p Interface) bool {
+func (q quotValue) Equal(p Type) bool {
 	other, ok := p.(quotValue)
 	if !ok {
 		return false

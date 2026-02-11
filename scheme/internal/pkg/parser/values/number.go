@@ -17,14 +17,14 @@ var One Numeric = Number{
 	IsInt:  true,
 }
 
-func NewInt(i int64) Interface {
+func NewInt(i int64) Type {
 	return Number{
 		IsInt:  true,
 		IntVal: i,
 	}
 }
 
-func NewFloat(f float64) Interface {
+func NewFloat(f float64) Type {
 	return Number{
 		IsInt:    false,
 		FloatVal: f,
@@ -46,7 +46,7 @@ type Number struct {
 	IsInt    bool
 }
 
-func (n Number) Equal(p Interface) bool {
+func (n Number) Equal(p Type) bool {
 	if n.Type() != p.Type() {
 		return false
 	}

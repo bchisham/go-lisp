@@ -7,7 +7,7 @@ import (
 )
 
 type Char interface {
-	Interface
+	Type
 	Rune() rune
 }
 
@@ -16,7 +16,7 @@ type char struct {
 	rune rune
 }
 
-func (c char) Equal(p Interface) bool {
+func (c char) Equal(p Type) bool {
 	//TODO implement me
 	panic("implement me")
 }
@@ -33,7 +33,7 @@ func (c char) WriteString() string {
 	return writeChar(c.rune)
 }
 
-func NewChar(r rune) Interface {
+func NewChar(r rune) Type {
 	return char{rune: r}
 }
 

@@ -8,7 +8,7 @@ import (
 
 var ErrNotAPrimitive = errors.New("not a primitive")
 
-func FromToken(tok lexer.Token) (v Interface) {
+func FromToken(tok lexer.Token) (v Type) {
 
 	switch tok.Type {
 	case lexer.TokenIdent:

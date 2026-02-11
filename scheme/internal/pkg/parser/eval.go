@@ -9,7 +9,7 @@ import (
 )
 
 // evalSexpression evaluate a S-Expression in the given environment
-func evalSexpression(l values.Interface, rt *builtins.Runtime) (values.Interface, error) {
+func evalSexpression(l values.Type, rt *builtins.Runtime) (values.Type, error) {
 
 	switch l.(type) {
 	case values.Nil:
@@ -38,7 +38,7 @@ func evalSexpression(l values.Interface, rt *builtins.Runtime) (values.Interface
 // evaluatePair evaluates a pair as a S-Expression
 // It handles the evaluation of the head and applies it to the tail
 // according to the rules of the Scheme language
-func evaluatePair(lst values.Pair, rt *builtins.Runtime) (values.Interface, error) {
+func evaluatePair(lst values.Pair, rt *builtins.Runtime) (values.Type, error) {
 	head := lst.Car()
 	tail := lst.Cdr()
 	switch head.(type) {
@@ -141,7 +141,7 @@ func lookupProcedure(ident values.Identifier, rt *builtins.Runtime) (builtins.La
 	return lambda, nil
 }
 
-func lookupIdentifier(ident values.Identifier, rt *builtins.Runtime) (values.Interface, error) {
+func lookupIdentifier(ident values.Identifier, rt *builtins.Runtime) (values.Type, error) {
 	resolvVal, ok := rt.Env.Lookup(ident.GetName())
 	if !ok {
 		return values.NewVoidType(), ErrUndefinedIdent
