@@ -58,10 +58,12 @@ prints `3`
 (- 5 2)
 ```
 prints `3`
-```lisp(* 3 4)
+```lisp
+(* 3 4)
 ```
 prints `12`
-```lisp(/ 10 2)
+```lisp
+(/ 10 2)
 ```
 prints `5`
 
@@ -72,10 +74,12 @@ prints `5`
 prints `11`
 
 #### Define Global Variables
-```lisp(define x 10)
+```lisp
+(define x 10)
 ```
 defines a global variable `x` with the value `10`
-```lisp(+ x 5)
+```lisp
+(+ x 5)
 ```
 prints `15`
 
