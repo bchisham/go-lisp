@@ -24,5 +24,6 @@ type EvalCompleteMsg struct {
 
 type ParserIoAvailable struct {
 	content  string
+	err      error
 	canceled bool
 }

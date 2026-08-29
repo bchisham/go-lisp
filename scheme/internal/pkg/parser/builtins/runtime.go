@@ -10,9 +10,10 @@ import (
 type EvaluatorCallback Expression
 
 type Runtime struct {
-	Out io.Writer
-	Err io.Writer
-	Env Environment
+	Out      io.Writer
+	Err      io.Writer
+	Env      Environment
+	callback Expression
 }
 
 type configRuntime struct {
@@ -65,9 +66,10 @@ func NewRuntime(opt ...OptionRuntime) *Runtime {
 		o(&cfg)
 	}
 	rt := &Runtime{
-		Out: cfg.out,
-		Err: cfg.err,
-		Env: cfg.env,
+		Out:      cfg.out,
+		Err:      cfg.err,
+		Env:      cfg.env,
+		callback: cfg.callback,
 	}
 	rt.defaultEnvironment(cfg.callback)
 	return rt
@@ -80,4 +82,8 @@ func (rt *Runtime) ExtendEnvironment() *Runtime {
 		Err: rt.Err,
 		Env: newEnv,
 	}
+}
+
+func (rt *Runtime) Eval(v values.Type) (values.Type, error) {
+	return rt.callback(v, rt)
 }

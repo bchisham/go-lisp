@@ -10,6 +10,7 @@ import (
 
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser"
 	"github.com/bchisham/go-lisp/scheme/internal/pkg/parser/builtins"
+	"github.com/bchisham/go-lisp/scheme/internal/pkg/tui/events"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -20,7 +21,8 @@ import (
 
 type Model struct {
 	textarea           textarea.Model
-	viewport           viewport.Model
+	viewport           ReplLogPanel
+	statusTable        StatusPanel
 	cursorStyle        lipgloss.Style
 	cursorLineStyle    lipgloss.Style
 	inputStyle         lipgloss.Style
@@ -44,6 +46,13 @@ type Model struct {
 	keymap             keymap
 	help               help.Model
 }
+
+const (
+	statusRowCmdCount   = iota
+	statusRowOpenParens = iota
+	statusRowCursorPos  = iota
+	statusRowLastError  = iota
+)
 
 func InitialModel(prompt string) Model {
 	//init styles
@@ -92,8 +101,10 @@ func InitialModel(prompt string) Model {
 	ta.SetHeight(10)
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	ta.ShowLineNumbers = true
-	vp := viewport.New(30, 5)
+	vp := viewport.New(40, 5)
 	vp.SetContent("welcome to scheme")
+
+	statusTable := NewStatusPanel()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -102,7 +113,14 @@ func InitialModel(prompt string) Model {
 		builtins.WithEvaluatorCallback(parser.DefaultExpressionEvaluator()))
 
 	return Model{
-		viewport:           vp,
+		viewport: ReplLogPanel{
+			Model:          vp,
+			style:          lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1, 1),
+			ErrResultStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("160")),
+			UserEntryStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("69")),
+			OutputStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("250")),
+			outputs:        make([]string, 0),
+		},
 		textarea:           ta,
 		history:            make([]string, 0),
 		outputs:            make([]string, 0),
@@ -121,6 +139,7 @@ func InitialModel(prompt string) Model {
 		cursorLineStyle:    cursorLineStyle,
 		focusedBorderStyle: focusedBorderStyle,
 		blurredBorderStyle: blurredBorderStyle,
+		statusTable:        statusTable,
 		keymap: keymap{
 			Up: key.NewBinding(
 				key.WithKeys("up"),
@@ -180,7 +199,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.viewport.Width = msg.Width
+		m.viewport.Width = msg.Width //2 - 2
 		m.textarea.SetWidth(msg.Width)
 		m.viewport.Height = msg.Height - m.textarea.Height() -
 			lipgloss.Height(strings.Repeat("\n", 5))
@@ -207,13 +226,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// reverse search history
 			return m.handleReverseHistorySearch(tiCmd, vpCmd)
 		case key.Matches(msg, m.keymap.Submit):
-			userCmd := m.pendingCommand.String()
+			userCmd := strings.TrimSpace(m.pendingCommand.String())
 			if userCmd == "" {
 				return m, tea.Batch(tiCmd, vpCmd)
 			}
 
 			if m.input != "" {
-				userCmd += " " + m.input + "\n"
+				userCmd += "\n" + m.input
 			}
 			if m.pendingCommand.Len() > 0 {
 				m.pendingCommand.Reset()
@@ -311,6 +330,15 @@ func (m Model) handleEvalComplete(msg EvalCompleteMsg, tiCmd, vpCmd tea.Cmd) (te
 		m.outputs = append(m.outputs,
 			fmt.Sprintf("%s Error: %s", now.Format(time.Kitchen),
 				msg.err.Error()))
+
+		m.statusTable.OnCommandFinished(events.NewCommandFinished("", msg.err))
+	}
+	if msg.result != nil {
+		m.outputs = append(m.outputs,
+			fmt.Sprintf("%s Result: %s", now.Format(time.Kitchen),
+				msg.result.DisplayString()))
+
+		m.statusTable.OnCommandFinished(events.NewCommandFinished(msg.result.DisplayString(), nil))
 	}
 
 	m.viewport.SetContent(
@@ -346,6 +374,7 @@ func (m Model) handleParserIoAvailable(msg ParserIoAvailable, tiCmd, vpCmd tea.C
 		m.viewport.SetContent(lipgloss.NewStyle().
 			Width(m.viewport.Width).
 			Render(strings.Join(m.outputs, "\n")))
+		m.statusTable.OnCommandFinished(events.NewCommandFinished(msg.content, nil))
 		m.viewport.GotoBottom()
 	}
 	m.input = ""
@@ -361,6 +390,9 @@ func (m Model) handleParserDispatch(msg string, tiCmd, vpCmd tea.Cmd) (tea.Model
 	runParserCmd = func() tea.Msg {
 		m.runtime.Out = pw
 		val, err := parser.EvalString(m.ctx, msg, m.runtime)
+		defer func() {
+			_ = pw.Close()
+		}()
 		return EvalCompleteMsg{result: val, err: err}
 	}
 	updateParseResultCmd = func() tea.Msg {
@@ -373,16 +405,25 @@ func (m Model) handleParserDispatch(msg string, tiCmd, vpCmd tea.Cmd) (tea.Model
 			buf := make([]byte, 1024)
 			for {
 				n, err := pr.Read(buf)
-				if err != nil {
+				if n > 0 {
+					content = string(buf[:n])
 				}
-				content = string(buf[:n])
-				return ParserIoAvailable{content: content}
-
+				if err != nil {
+					if err == io.EOF {
+						return ParserIoAvailable{content: content}
+					}
+					return ParserIoAvailable{err: err, content: content}
+				}
+				if n > 0 {
+					return ParserIoAvailable{content: content}
+				}
 			}
 		}
 	}
 	now := time.Now()
-	m.history = append(m.history, m.input)
+	m.statusTable.OnCommandStarted(events.NewCommandStarted(msg))
+
+	m.history = append(m.history, msg)
 	m.outputs = append(m.outputs, fmt.Sprintf("%s Executed: %s", now.Format(time.Kitchen), msg))
 	m.viewport.
 		SetContent(lipgloss.NewStyle().
@@ -438,9 +479,7 @@ func (m Model) handleReverseHistorySearch(tiCmd, vpCmd tea.Cmd) (tea.Model, tea.
 	if len(m.history) == 0 {
 		return m, tea.Batch(tiCmd, vpCmd)
 	}
-	if m.cursor < 0 {
-		m.cursor = len(m.history) - 1
-	}
+	m.cursor = len(m.history) - 1
 	for i := len(m.history) - 1; i >= 0; i-- {
 		if strings.Contains(m.history[i], m.input) {
 			m.cursor = i
